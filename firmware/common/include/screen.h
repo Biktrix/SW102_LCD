@@ -291,7 +291,7 @@ typedef struct {
  *
  * Note: this class is normally used as a CONST, but in rare cases in can be placed in RAM.
  */
-typedef const struct Field {
+typedef const struct _Field {
 	FieldVariant variant :4;
 	FieldRW *rw;
 
@@ -305,7 +305,7 @@ typedef const struct Field {
 
 		struct {
 			GraphVars *graph_vars;
-			const struct Field *source; // the data field we are graphing
+			const struct _Field *source; // the data field we are graphing
 			FilterOp filter : 2; // allow 4 options for now
       graph_auto_max_min_t auto_max_min : 2;
 			int32_t min_threshold; // if value is less than this, it is ignored for purposes of calculating min/average - useful for ignoring speed/cadence when stopped
@@ -316,12 +316,12 @@ typedef const struct Field {
 		} custom;
 
 		struct {
-			const struct Field *entries; // the menu entries for this submenu.
+			const struct _Field *entries; // the menu entries for this submenu.
 			const char *label; // the title shown in the GUI for this menu
 		} scrollable;
 
 		struct {
-			const struct Field **choices; // An array of ptrs (editable) fields (terminated with NULL) that the user can choose from
+			const struct _Field **choices; // An array of ptrs (editable) fields (terminated with NULL) that the user can choose from
       uint8_t   *selector; // the index into the array of the users current choice (library clients should store this to eeprom)
 		} customizable;
 
