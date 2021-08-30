@@ -7,7 +7,7 @@
  */
 
 #include "stdio.h"
-
+#include <inttypes.h>
 #include "buttons.h"
 #include "state.h"
 

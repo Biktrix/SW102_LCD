@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#ifdef SW102
+#if defined(SW102) && defined(NRF51)
 #include "app_error.h"
 #else
 

@@ -1,6 +1,8 @@
 #ifndef INCLUDE_DEFINITIONS_H_
 #define INCLUDE_DEFINITIONS_H_
 
+#ifdef NRF51
+
 #include "boards.h"
 
 /*  Peripheral usage by SoftDevice 130 */
@@ -33,5 +35,6 @@
 #define UART0   0
 
 extern bool useSoftDevice;
+#endif
 
 #endif /* INCLUDE_DEFINITIONS_H_ */

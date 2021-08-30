@@ -25,7 +25,7 @@
 #include "state.h"
 #include "timer.h"
 #include "rtc.h"
-#ifdef SW102
+#if defined(SW102) && defined(NRF51)
 #include "peer_manager.h"
 #endif
 
@@ -1324,7 +1324,7 @@ void TripMemoriesReset(void) {
 }
 
 void DisplayResetBluetoothPeers(void) {
-#ifdef SW102
+#if defined(SW102) && defined(NRF51)
   if (ui8_g_configuration_display_reset_bluetooth_peers) {
     ui8_g_configuration_display_reset_bluetooth_peers = 0;
     // TODO: fist disable any connection
