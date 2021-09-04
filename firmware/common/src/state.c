@@ -10,21 +10,14 @@
 #include "stdio.h"
 #include "main.h"
 #include "utils.h"
-#include "screen.h"
 #include "rtc.h"
-#include "fonts.h"
 #include "uart.h"
-#include "mainscreen.h"
 #include "eeprom.h"
 #include "buttons.h"
-#include "fault.h"
 #include "state.h"
 #include "adc.h"
 #include "timer.h"
 #include <stdlib.h>
-#ifdef SW102
-#include "ble_services.h"
-#endif
 
 //#define DEBUG_TSDZ2_FIRMWARE
 
@@ -48,6 +41,9 @@ volatile motor_init_status_t ui8_g_motor_init_status = MOTOR_INIT_STATUS_RESET;
 tsdz2_firmware_version_t g_tsdz2_firmware_version = { 0xff, 0, 0 };
 
 static void motor_init(void);
+
+void ui_motor_stabilized();
+void ui_show_motor_status(motor_init_state_t state);
 
 rt_vars_t rt_vars;
 ui_vars_t ui_vars;
@@ -610,10 +606,7 @@ uint8_t rt_first_time_management(void) {
       (g_motor_init_state == MOTOR_INIT_SIMULATING)))
     if (++ui32_counter > 50) {
       ui8_g_motorVariablesStabilized = 1;
-#ifndef SW102
-      extern Field *activeGraphs; // FIXME, move this extern someplace better, placing here for review purposes
-  	  activeGraphs = &(*graphs[g_showNextScreenIndex]); // allow graph plotting to start
-#endif
+      ui_motor_stabilized();
     }
 
 	// don't update LCD up to we get first communication package from the motor controller
@@ -951,10 +944,6 @@ void rt_processing(void)
 {
   communications();
 
-#ifdef SW102
-  send_bluetooth(&rt_vars);
-#endif
-
   // called here because this state machine for motor_init should run every 100ms
   // montor init processing must be done when exiting the configurations menu
   // once motor is initialized, this should take almost no processing time
@@ -1033,11 +1022,11 @@ static void motor_init(void) {
 
       // are we simulating?
       bool sim = (battery_voltage_10x_get() < MIN_VOLTAGE_10X);
-      if (sim) {
-        fieldPrintf(&bootStatus2, _S("SIMULATING TSDZ2!", "SIMULATING"));
+      if (sim) {	      
         g_motor_init_state = MOTOR_INIT_SIMULATING;
+        ui_show_motor_status(g_motor_init_state);
       } else {
-        fieldPrintf(&bootStatus2, _S("Wait TSDZ2", "Wait TSDZ2"));
+        ui_show_motor_status(MOTOR_INIT_WAIT_MOTOR_ALIVE);
       }
     }
 
@@ -1051,8 +1040,8 @@ static void motor_init(void) {
         // check timeout
         ui16_motor_init_command_error_cnt--;
         if (ui16_motor_init_command_error_cnt == 0) {
-          fieldPrintf(&bootStatus2, _S("Error brakes", "e: brakes"));
           g_motor_init_state = MOTOR_INIT_GET_MOTOR_ALIVE;
+          ui_show_motor_status(g_motor_init_state);
         }
         break;
 
@@ -1066,8 +1055,8 @@ static void motor_init(void) {
         // check timeout
         ui16_motor_init_command_error_cnt--;
         if (ui16_motor_init_command_error_cnt == 0) {
-          fieldPrintf(&bootStatus2, _S("Error RX line", "e: RX"));
           g_motor_init_state = MOTOR_INIT_ERROR_GET_FIRMWARE_VERSION;
+          ui_show_motor_status(g_motor_init_state);
         }
         break;
 
@@ -1078,8 +1067,8 @@ static void motor_init(void) {
             g_motor_init_state = MOTOR_INIT_SET_CONFIGURATIONS;
             // not break here to follow for next case
         } else {
-          fieldPrintf(&bootStatus2, _S("TSDZ2 firmware error", "e: firmwa"));
           g_motor_init_state = MOTOR_INIT_ERROR_FIRMWARE_VERSION;
+          ui_show_motor_status(g_motor_init_state);
           break;
         }
 
@@ -1094,8 +1083,8 @@ static void motor_init(void) {
         // check timeout
         ui16_motor_init_command_error_cnt--;
         if (ui16_motor_init_command_error_cnt == 0) {
-          fieldPrintf(&bootStatus2, _S("Error set config", "e: config")); // in the case we are on the boot screen
           g_motor_init_state = MOTOR_INIT_ERROR_SET_CONFIGURATIONS;
+          ui_show_motor_status(g_motor_init_state);
           break;
         }
 

@@ -2528,3 +2528,10 @@ void screen_init(void) {
   motorFOCField.rw->editable.number.config_warn_threshold = &g_vars[VarsMotorFOC].config_warn_threshold;
   motorFOCField.rw->editable.number.config_error_threshold = &g_vars[VarsMotorFOC].config_error_threshold;
 }
+
+void ui_motor_stabilized() {
+#ifndef SW102
+  extern Field *activeGraphs; // FIXME, move this extern someplace better, placing here for review purposes
+  activeGraphs = &(*graphs[g_showNextScreenIndex]); // allow graph plotting to start
+#endif
+}

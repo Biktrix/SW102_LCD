@@ -1458,3 +1458,32 @@ void onSetConfigurationBatterySOCUsedWh(uint32_t v) {
   reset_wh();
   ui_vars.ui32_wh_x10_offset = v;
 }
+
+void ui_show_motor_status(motor_init_state_t state)
+{
+	switch(state) {
+		case MOTOR_INIT_SIMULATING:
+			fieldPrintf(&bootStatus2, _S("SIMULATING TSDZ2!", "SIMULATING"));
+			break;
+
+		case MOTOR_INIT_WAIT_MOTOR_ALIVE:
+			fieldPrintf(&bootStatus2, _S("Wait TSDZ2", "Wait TSDZ2"));
+			break;
+
+		case MOTOR_INIT_GET_MOTOR_ALIVE:
+			fieldPrintf(&bootStatus2, _S("Error brakes", "e: brakes"));
+			break;
+
+		case MOTOR_INIT_ERROR_GET_FIRMWARE_VERSION:
+			fieldPrintf(&bootStatus2, _S("Error RX line", "e: RX"));
+			break;
+
+		case MOTOR_INIT_ERROR_FIRMWARE_VERSION:
+			fieldPrintf(&bootStatus2, _S("TSDZ2 firmware error", "e: firmwa"));
+			break;
+
+		case MOTOR_INIT_ERROR_SET_CONFIGURATIONS:
+			fieldPrintf(&bootStatus2, _S("Error set config", "e: config")); // in the case we are on the boot screen
+			break;
+	}
+}
