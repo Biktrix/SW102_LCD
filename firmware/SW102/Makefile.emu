@@ -9,7 +9,7 @@ SRC_FILES += \
   $(PROJ_DIR)/src/emu/main.cpp \
   $(PROJ_DIR)/src/emu/lcd.cpp \
   $(PROJ_DIR)/src/sw102/rtc.c \
-  $(PROJ_DIR)/src/emu/uart.c \
+  $(PROJ_DIR)/src/emu/uart.cpp \
   $(PROJ_DIR)/src/emu/ble_services.c \
   $(PROJ_DIR)/src/emu/button.c \
   $(PROJ_DIR)/src/emu/eeprom_hw.c \
@@ -40,8 +40,8 @@ CFLAGS += -DBOARD_CUSTOM -DSW102
 CFLAGS += -fno-builtin --short-enums
 
 
-CFLAGS += $(shell pkg-config --cflags Qt5Core Qt5Gui Qt5Widgets) -fPIC
-LDFLAGS += $(shell pkg-config  --libs Qt5Core Qt5Gui Qt5Widgets) -fPIC
+CFLAGS += $(shell pkg-config --cflags Qt5Core Qt5Gui Qt5Widgets Qt5SerialPort) -fPIC
+LDFLAGS += $(shell pkg-config  --libs Qt5Core Qt5Gui Qt5Widgets Qt5SerialPort) -fPIC
 
 emu: $(patsubst %.cpp,$(BUILD_BASE)/%.o, $(patsubst %.c, $(BUILD_BASE)/%.o, $(SRC_FILES)))
 	$(CXX) -o $@ $^ $(LDFLAGS)

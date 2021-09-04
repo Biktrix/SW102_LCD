@@ -67,6 +67,7 @@ int main(int ac, char ** av)
 	QApplication app(ac, av);
 	
 	lcd_init();
+	uart_init();
 
 	eeprom_init();
 	screen_init();
