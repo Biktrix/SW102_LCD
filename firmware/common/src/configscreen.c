@@ -2,7 +2,8 @@
 #include "mainscreen.h"
 #include "configscreen.h"
 #include "eeprom.h"
-
+#include "state.h"
+#include "lcd.h"
 
 
 static Field tripMenus[] =

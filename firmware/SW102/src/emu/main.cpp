@@ -15,6 +15,7 @@ extern "C" {
 #include "rtc.h"
 #include "screen.h"
 #include "eeprom.h"
+#include "state.h"
 #include "mainscreen.h"
 #include "configscreen.h"
 #include "adc.h"

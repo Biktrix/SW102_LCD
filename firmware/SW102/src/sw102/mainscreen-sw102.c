@@ -22,6 +22,7 @@
 #include "ugui.h"
 #include "configscreen.h"
 #include "battery_gui.h"
+#include "state.h"
 
 Field batteryField = FIELD_CUSTOM(renderBattery);
 

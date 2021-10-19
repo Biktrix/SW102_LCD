@@ -9,6 +9,7 @@
 #include "stdio.h"
 #include <string.h>
 #include "eeprom.h"
+#include "eeprom_internal.h"
 #include "eeprom_hw.h"
 #include "main.h"
 #include "mainscreen.h"

@@ -17,7 +17,9 @@
 #include "state.h"
 #include "adc.h"
 #include "timer.h"
+#include "lcd.h"
 #include <stdlib.h>
+#include "screen.h"
 
 //#define DEBUG_TSDZ2_FIRMWARE
 
