@@ -233,6 +233,7 @@ void buttons_clock(void) {
 
 		// if button release
 		if (!buttons_get_onoff_state()) {
+#ifndef DISABLE_ONOFF_CLICK_LONGCLICK
 			// let's validade if will be a quick click + long click
 			if (ui32_onoff_button_state_counter <= MS_TO_TICKS(TIME_2)) {
 				ui32_onoff_button_state_counter = 0;
@@ -240,7 +241,9 @@ void buttons_clock(void) {
 				break;
 			}
 			// event click
-			else {
+			else 
+#endif
+			{
 				buttons_set_events(ONOFF_CLICK);
 				ui32_onoff_button_state = 0;
 				break;
