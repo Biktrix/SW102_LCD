@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "stdint.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 void lcd_init(void);
 void lcd_refresh(void); // Call to flush framebuffer to SPI device
 void lcd_set_backlight_intensity(uint8_t level);
 
-
+void lcd_pset(unsigned int x, unsigned int y, bool v);

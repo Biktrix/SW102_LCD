@@ -10,14 +10,9 @@
 #include "button.h"
 #include "buttons.h"
 #include "lcd.h"
-#include "ugui.h"
-#include "fonts.h"
 #include "uart.h"
 #include "utils.h"
-#include "screen.h"
 #include "eeprom.h"
-#include "mainscreen.h"
-#include "configscreen.h"
 #include "nrf_soc.h"
 #include "adc.h"
 #include "hardfault.h"
@@ -28,10 +23,11 @@
 #include "nrf_power.h"
 #include "timer.h"
 
-/* Variable definition */
+#include "ui.h"
+#include "gfx.h"
+extern const struct screen screen_boot;
 
-/* �GUI */
-UG_GUI gui;
+/* Variable definition */
 
 /* Buttons */
 Button buttonM, buttonDWN, buttonUP, buttonPWR;
@@ -75,7 +71,7 @@ void lcd_power_off(uint8_t updateDistanceOdo)
   eeprom_write_variables();
 
   // put screen all black and disable backlight
-  UG_FillScreen(0);
+  clear_all();
   lcd_refresh();
   // lcd_set_backlight_intensity(0);
 
@@ -113,7 +109,7 @@ void watchdog_start() {
   if(sd_power_reset_reason_get(&reason) == NRF_SUCCESS) {
     if(reason & NRF_POWER_RESETREAS_DOG_MASK) {
       APP_ERROR_CHECK(sd_power_reset_reason_clr(NRF_POWER_RESETREAS_DOG_MASK));
-      wd_failure_detected = true;
+      //wd_failure_detected = true;
     }
   }
 
@@ -186,6 +182,7 @@ int main(void)
   gpio_init();
   system_power(true);
   lcd_init();
+  set_lcd_backlight();
   uart_init();
   battery_voltage_init();
 
@@ -197,9 +194,7 @@ int main(void)
   /* eeprom_init AFTER ble_init! */
   eeprom_init();
 
-  screen_init();
-
-  screenShow(&bootScreen);
+  showScreen(&screen_boot);
 
 //  watchdog_start();
 
@@ -230,7 +225,7 @@ int main(void)
           APP_ERROR_HANDLER(FAULT_STACKOVERFLOW);
       }
 
-      main_idle();
+      ui_update();
     }
 
     if(useSoftDevice)
@@ -338,4 +333,15 @@ static void init_app_timers(void)
   APP_ERROR_CHECK(app_timer_start(gui_timer_id, GUI_INTERVAL, NULL));
 }
 
+void rt_graph_process()
+{
+}
+void ui_motor_stabilized()
+{
+}
 
+void set_conversions()
+{
+}
+
+uint8_t g_showNextScreenIndex, g_showNextScreenPreviousIndex;

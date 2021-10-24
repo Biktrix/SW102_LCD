@@ -15,7 +15,6 @@
 extern "C"  {
 #include "lcd.h"
 #include "common.h"
-#include "ugui.h"
 #include "button.h"
 }
 
@@ -68,14 +67,11 @@ protected:
 	}
 } *oled;
 
-
-
-static void pset(UG_S16 x, UG_S16 y, UG_COLOR col)
+extern "C" void lcd_pset(unsigned int x, unsigned int y, bool v)
 {
 	if(x < 64 && y < 128)
-		((uint8_t*)oled->display.bits())[y*64+x]=(col > 0 && col != C_TRANSPARENT)?0xff:0;
+		((uint8_t*)oled->display.bits())[y*64+x]=v?0xff:0;
 }
-extern UG_GUI gui;
 
 /**
  * @brief LCD initialization including hardware layer.
@@ -84,8 +80,6 @@ extern "C" void lcd_init(void)
 {
 	oled = new OLEDWidget;
 	oled->setVisible(true);
-	
-	UG_Init(&gui, pset, 64, 128); // Pixel set function
 }
 
 

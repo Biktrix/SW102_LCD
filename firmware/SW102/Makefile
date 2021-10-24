@@ -57,20 +57,17 @@ SRC_FILES += \
   $(PROJ_DIR)/src/sw102/adc.c \
   $(PROJ_DIR)/src/sw102/eeprom_hw.c \
   $(PROJ_DIR)/src/sw102/rtc.c \
-  $(PROJ_DIR)/src/sw102/battery_gui.c \
-  $(PROJ_DIR)/src/sw102/mainscreen-sw102.c \
-  $(COMMON_DIR)/src/ugui.c \
-  $(COMMON_DIR)/src/fault.c \
+  $(PROJ_DIR)/src/sw102/gfx.c \
+  $(PROJ_DIR)/src/sw102/ui.c \
+  $(PROJ_DIR)/src/sw102/screen_boot.c \
+  $(PROJ_DIR)/src/sw102/screen_main.c \
+  $(PROJ_DIR)/src/sw102/screen_cfg.c \
   $(COMMON_DIR)/src/buttons.c \
   $(PROJ_DIR)/src/sw102/app_uart_fifo_mod.c \
   $(PROJ_DIR)/src/sw102/uart.c \
   $(COMMON_DIR)/src/utils.c \
   $(COMMON_DIR)/src/state.c \
   $(COMMON_DIR)/src/eeprom.c \
-  $(COMMON_DIR)/src/screen.c \
-  $(COMMON_DIR)/src/fonts.c \
-  $(COMMON_DIR)/src/mainscreen.c \
-  $(COMMON_DIR)/src/configscreen.c \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_weak.c \
   $(SDK_ROOT)/components/libraries/util/nrf_assert.c \
@@ -116,6 +113,7 @@ SRC_FILES += \
 
 # Include folders common to all targets
 INC_FOLDERS += \
+  $(PROJ_DIR)/assets \
   $(PROJ_DIR)/include \
   $(COMMON_DIR)/include \
   $(SDK_ROOT)/components \
@@ -238,6 +236,8 @@ CFLAGS += -mfloat-abi=soft
 # keep every function in separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin --short-enums
+
+CFLAGS += -DDISABLE_ONOFF_CLICK_LONGCLICK
 
 # To make low level debugging easier, generate asm listing files for each .o 
 CFLAGS += -Wa,-adhln=$(OUTPUT_DIRECTORY)/$*.lst
