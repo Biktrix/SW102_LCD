@@ -26,9 +26,18 @@ struct font {
 		(const unsigned short[]){ 0, __VA_ARGS__, font_ ## name ## _width } \
 	};
 
-void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int w, int h);
+enum drawflags_t {
+	DrawInvert = 1,
+
+	AlignMask = (3<<1),
+	AlignLeft=(0<<1),
+	AlignRight=(1<<1),
+	AlignCenter=(2<<1),
+};
+
+void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int w, int h, int flags);
 inline static void img_draw(const struct image *src, int x0, int y0) {
-	img_draw_clip(src, x0, y0, 0, 0, src->w, src->h);
+	img_draw_clip(src, x0, y0, 0, 0, src->w, src->h, 0);
 }
 void draw_hline(int x0, int x1, int y);
 
@@ -38,9 +47,4 @@ inline static void clear_all() { fill_rect(0,0,64,128, false); }
 int font_getchar(const struct font *fnt, char c, int *cx);
 int font_length(const struct font *fnt, const char *txt);
 
-enum font_align_t {
-	AlignLeft,
-	AlignRight,
-	AlignCenter
-};
-int font_text(const struct font *fnt, int x, int y, const char *txt, enum font_align_t align);
+int font_text(const struct font *fnt, int x, int y, const char *txt, int flags);

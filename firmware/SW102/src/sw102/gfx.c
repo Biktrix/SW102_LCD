@@ -1,7 +1,7 @@
 #include "gfx.h"
 #include "lcd.h"
 
-void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int w, int h)
+void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int w, int h, int flags)
 {
 	int y,x;
 	const unsigned char *srcptr = src->data;
@@ -12,7 +12,7 @@ void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int 
 		unsigned char bits;
 		for(x=0; x < w;x++) 
 			if(!((srcptr[(x+cx)/8] >> ((x+cx)&7)) & 1))
-				lcd_pset(x0+x, y+y0, true);
+				lcd_pset(x0+x, y+y0, !(flags & DrawInvert));
 		srcptr += (src->w+7)/8;
 	}
 }
@@ -58,8 +58,9 @@ int font_length(const struct font *fnt, const char *txt)
 	return l;
 }
 
-int font_text(const struct font *fnt, int x, int y, const char *txt, enum font_align_t align)
+int font_text(const struct font *fnt, int x, int y, const char *txt, int flags)
 {
+	int align = flags & AlignMask;
 	if(align == AlignRight) {
 		x = x - font_length(fnt, txt);
 	} else if(align == AlignCenter) {
@@ -70,7 +71,7 @@ int font_text(const struct font *fnt, int x, int y, const char *txt, enum font_a
 		int cx, l;
 		l = font_getchar(fnt, *txt++, &cx);
 		if(l > 0) {
-			img_draw_clip(fnt->img, x, y, cx, 0, l, fnt->img->h);
+			img_draw_clip(fnt->img, x, y, cx, 0, l, fnt->img->h, flags);
 			x += l;
 		}
 	}

@@ -28,4 +28,5 @@ enum {
 void showScreen(const struct screen *new_screen);
 void ui_update();
 
+extern int tick;
 extern const struct screen *activeScreen;

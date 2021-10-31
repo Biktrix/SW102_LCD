@@ -16,9 +16,12 @@ extern const struct screen screen_main;
 static void boot_idle()
 {
 	switch (g_motor_init_state) {
+		case MOTOR_INIT_SIMULATING:
+			if(tick < 50)
+				break;
+
 		case MOTOR_INIT_WAIT_GOT_CONFIGURATIONS_OK:
 		case MOTOR_INIT_READY:
-		case MOTOR_INIT_SIMULATING:
 			showScreen(&screen_main);
 			return;
 
@@ -27,16 +30,15 @@ static void boot_idle()
 			break;
 	}
 
-	static int tick=0;
-	if(++tick<5)
+	if(tick&3)
 		return;
-	tick=0;
+
 	static int q=1;
 	fill_rect(0,0,64,69, false);
 	img_draw(&img_logo, 16, 17);
-	img_draw_clip(&img_logo_anim, 8, 29, 0, q*18, 18, 18);
+	img_draw_clip(&img_logo_anim, 8, 29, 0, q*18, 18, 18, 0);
 	q=(q+3)&3;
-	img_draw_clip(&img_logo_anim, 38, 29, 0, q*18, 18, 18);
+	img_draw_clip(&img_logo_anim, 38, 29, 0, q*18, 18, 18, 0);
 	lcd_refresh();
 }
 

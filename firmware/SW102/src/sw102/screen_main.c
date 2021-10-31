@@ -155,10 +155,9 @@ static void draw_battery_indicator(ui_vars_t *ui)
 {
 	char buf[10];
 	int batpx = ui8_g_battery_soc / 5;
-	if(ui->ui8_street_mode_enabled) 
-		img_draw(&img_icon_battery_frame, 0, 1);
+	img_draw(&img_icon_battery_frame, 0, 1);
 
-	img_draw_clip(&img_icon_battery, 0, 1, 0, 0, batpx+3, img_icon_battery.h);
+	img_draw_clip(&img_icon_battery, 0, 1, 0, 0, batpx+3, img_icon_battery.h, 0);
 
 	sprintf(buf, "%d%%", ui8_g_battery_soc);
 	font_text(&font_battery, 62, 3, buf, AlignRight);
@@ -209,9 +208,7 @@ static void main_idle()
 	ui_vars_t *ui = get_ui_vars();
 	clear_all();
 
-	static int tick=0;
-
-	if(++tick == 10) {
+	if(!(tick&15)){
 		if (ui->ui16_wheel_speed_x10 > 0) {
 			graph_append(&graph_speed, ui->ui16_wheel_speed_x10/3); 	// 0- 76
 			graph_append(&graph_pedal_power, ui->ui16_pedal_power/2);	// 0- 512W
@@ -219,7 +216,6 @@ static void main_idle()
 			graph_append(&graph_cadence, ui->ui8_pedal_cadence_filtered);	// 0-255
 			graph_head=(graph_head+1) % GRAPH_DEPTH;
 		}
-		tick=0;
 	}
 
 	if(ui->ui8_street_mode_enabled) {
@@ -249,11 +245,6 @@ static void main_idle()
 	graph_paint(gd, 3, 114, 58, 50, 114-72);
 
 	lcd_refresh();
-
-	// terminate walk assist as soon as the down button is released
-	if(!buttons_get_down_state()) {
-		ui_vars.ui8_walk_assist = 0;
-	}
 }
 
 extern const struct screen screen_cfg;
@@ -282,13 +273,16 @@ static void main_button(int but)
 		ui_vars.ui8_walk_assist = 1;
 	}
 
+	if(but & DOWN_RELEASE)
+		ui_vars.ui8_walk_assist = 0;
+
 	if(but & M_CLICK) {
 		display_mode = (enum display_mode_t)(((int)display_mode + 1) % ModeLast);
 	}
 	
 	if(but & M_LONG_CLICK) {
 		// enter cfg screen
-//		showScreen(&screen_cfg);
+		showScreen(&screen_cfg);
 	}
 }
 

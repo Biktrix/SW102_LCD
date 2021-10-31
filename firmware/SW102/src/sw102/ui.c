@@ -20,6 +20,7 @@ void showScreen(const struct screen *new_screen)
 }
 
 void lcd_power_off(uint8_t updateDistanceOdo);
+int tick;
 void ui_update()
 {
 	buttons_events_t ev = buttons_get_events();
@@ -40,4 +41,5 @@ void ui_update()
 	rt_processing_stop();
 	copy_rt_to_ui_vars();
 	rt_processing_start();
+	++tick;
 }
