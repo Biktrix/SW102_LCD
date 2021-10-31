@@ -35,7 +35,7 @@ int font_getchar(const struct font *fnt, char c, int *cx)
 {
 	int i0=0;
 	int i1=fnt->nchars;
-	for(;;) {
+	while(i0<i1) {
 		int m = (i0+i1)/2;
 		if(fnt->chars[m] < c) {
 			i0 = m+1;
@@ -47,6 +47,7 @@ int font_getchar(const struct font *fnt, char c, int *cx)
 			return fnt->offsets[m+1] - fnt->offsets[m];
 		}
 	}
+	return 0;
 }
 
 int font_length(const struct font *fnt, const char *txt)
