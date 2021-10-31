@@ -59,10 +59,10 @@ SRC_FILES += \
   $(PROJ_DIR)/src/sw102/rtc.c \
   $(PROJ_DIR)/src/sw102/gfx.c \
   $(PROJ_DIR)/src/sw102/ui.c \
+  $(PROJ_DIR)/src/sw102/buttons.c \
   $(PROJ_DIR)/src/sw102/screen_boot.c \
   $(PROJ_DIR)/src/sw102/screen_main.c \
   $(PROJ_DIR)/src/sw102/screen_cfg.c \
-  $(COMMON_DIR)/src/buttons.c \
   $(PROJ_DIR)/src/sw102/app_uart_fifo_mod.c \
   $(PROJ_DIR)/src/sw102/uart.c \
   $(COMMON_DIR)/src/utils.c \
@@ -236,8 +236,6 @@ CFLAGS += -mfloat-abi=soft
 # keep every function in separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin --short-enums
-
-CFLAGS += -DDISABLE_ONOFF_CLICK_LONGCLICK
 
 # To make low level debugging easier, generate asm listing files for each .o 
 CFLAGS += -Wa,-adhln=$(OUTPUT_DIRECTORY)/$*.lst

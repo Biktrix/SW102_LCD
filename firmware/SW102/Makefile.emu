@@ -11,6 +11,7 @@ SRC_FILES += \
   $(PROJ_DIR)/src/sw102/rtc.c \
   $(PROJ_DIR)/src/sw102/gfx.c \
   $(PROJ_DIR)/src/sw102/ui.c \
+  $(PROJ_DIR)/src/sw102/buttons.c \
   $(PROJ_DIR)/src/sw102/screen_boot.c \
   $(PROJ_DIR)/src/sw102/screen_main.c \
   $(PROJ_DIR)/src/sw102/screen_cfg.c \
@@ -19,7 +20,6 @@ SRC_FILES += \
   $(PROJ_DIR)/src/emu/button.c \
   $(PROJ_DIR)/src/emu/eeprom_hw.c \
   $(PROJ_DIR)/src/emu/adc.c \
-  $(COMMON_DIR)/src/buttons.c \
   $(COMMON_DIR)/src/utils.c \
   $(COMMON_DIR)/src/state.c \
   $(COMMON_DIR)/src/eeprom.c
@@ -36,7 +36,6 @@ CFLAGS += $(OPT)
 CFLAGS += -DBOARD_CUSTOM -DSW102
 #CFLAGS += -Werror
 CFLAGS += -fno-builtin --short-enums
-CFLAGS += -DDISABLE_ONOFF_CLICK_LONGCLICK
 
 
 CFLAGS += $(shell pkg-config --cflags Qt5Core Qt5Gui Qt5Widgets Qt5SerialPort) -fPIC
