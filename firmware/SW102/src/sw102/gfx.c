@@ -6,6 +6,25 @@ void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int 
 	int y,x;
 	const unsigned char *srcptr = src->data;
 
+	if(x0 < 0) {
+		w += x0;
+		cx -= x0;
+		x0 = 0;
+	}
+
+	if(y0 < 0) {
+		h += y0;
+		cy -= y0;
+		y0 = 0;
+	}
+
+	if(w > 64 - x0)
+		w = 64 - x0;
+	if(h > 128 - y0)
+		h = 128 - y0;
+	if(w <= 0 || h <= 0)
+		return;
+
 	srcptr += cy * ((src->w+7)/8);
 
 	for(y=0;y < h;y++) {
@@ -19,6 +38,23 @@ void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int 
 
 void fill_rect(int x0, int y0, int w, int h, bool v)
 {
+	if(x0 < 0) {
+		w += x0;
+		x0 = 0;
+	}
+
+	if(y0 < 0) {
+		h += y0;
+		y0 = 0;
+	}
+	if(w > 64 - x0)
+		w = 64 - x0;
+	if(h > 128 - y0)
+		h = 128 - y0;
+
+	if(w <= 0 || h <= 0)
+		return;
+
 	int y,x;
 	for(y=0;y<h;y++)
 		for(x=0;x<w;x++)

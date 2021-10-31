@@ -76,23 +76,6 @@ static void send_cmd(const uint8_t *cmds, size_t numcmds)
 }
 
 /**
- * @brief �GUI pset function. This writes to a frameBuffer in SRAM.
- */
-void lcd_pset(unsigned int x, unsigned int y, bool color)
-{
-  if (x > 63 || y > 127)
-    return;
-
-  uint8_t page = y / 8;
-  uint8_t pixel = y % 8;
-
-  if (color)
-    SET_BIT(frameBuffer[page][x], pixel);
-  else
-    CLR_BIT(frameBuffer[page][x], pixel);
-}
-
-/**
  * @brief LCD initialization including hardware layer.
  */
 void lcd_init(void)

@@ -16,6 +16,7 @@ extern "C"  {
 #include "lcd.h"
 #include "common.h"
 #include "button.h"
+uint8_t frameBuffer[16][64];
 }
 
 #include <QWidget>
@@ -67,12 +68,6 @@ protected:
 	}
 } *oled;
 
-extern "C" void lcd_pset(unsigned int x, unsigned int y, bool v)
-{
-	if(x < 64 && y < 128)
-		((uint8_t*)oled->display.bits())[y*64+x]=v?0xff:0;
-}
-
 /**
  * @brief LCD initialization including hardware layer.
  */
@@ -85,6 +80,15 @@ extern "C" void lcd_init(void)
 
 extern "C" void lcd_refresh(void)
 {
+	auto optr = (uint8_t*)oled->display.bits();
+	for(int y=0;y<128;y++) {
+		uint8_t page = y / 8;
+		uint8_t pixel = y % 8;
+
+		for(int x=0;x<64;x++) {
+			*optr++ = (frameBuffer[page][x] >> pixel) & 1 ? 255 : 0;
+		}
+	}
 	oled->repaint();
 }
 
