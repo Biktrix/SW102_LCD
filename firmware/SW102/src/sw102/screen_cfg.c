@@ -3,6 +3,7 @@
 #include "lcd.h"
 #include "state.h"
 #include "buttons.h"
+#include "eeprom.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -23,13 +24,19 @@ enum {
 	F_NUMERIC,
 	F_OPTIONS,
 	F_TYPEMASK=0xff,
-	F_RO=0x100
+	F_RO=0x100, 
+	F_CALLBACK=0x200
 };
 
 struct configtree_t;
 
 static void do_reset_trip_a(const struct configtree_t *ign);
 static void do_reset_trip_b(const struct configtree_t *ign);
+static void do_reset_ble(const struct configtree_t *ign);
+static void do_reset_all(const struct configtree_t *ign);
+
+static void do_set_wh(int wh);
+static void do_set_odometer(int wh);
 
 typedef void (cfgaction_t)(const struct configtree_t *ign);
 
@@ -42,6 +49,13 @@ struct cfgnumeric_t {
 	int decimals;
 	const char *unit;
 	int min, max, step;
+};
+
+typedef void (wr_callback_t)(int value);
+
+struct cfgnumeric_cb_t {
+	struct cfgnumeric_t numeric;
+	wr_callback_t *callback;
 };
 
 static int ptr_get(const struct cfgptr_t *it)
@@ -115,6 +129,7 @@ struct configtree_t {
 		cfgaction_t *action;
 		const struct cfgptr_t *ptr;
 		const struct cfgnumeric_t *numeric;
+		const struct cfgnumeric_cb_t *numeric_cb;
 		const struct cfgoptions_t *options;
 	};
 };
@@ -156,8 +171,8 @@ const struct configtree_t cfgroot[] = {
 	}}},
 	{ "Charge", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
 		{ "Reset voltage", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_voltage_reset_wh_counter_x10), 1, "V", 160, 630 }},
-		{ "Total capacity", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10_100_percent), 1, "Wh", 0, 9990, 100 }}, // FIXME callback
-		{ "Used Wh", F_NUMERIC|F_RO,  .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", .step = 100 /* don't show decimals */ }},
+		{ "Total capacity", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10_100_percent), 1, "Wh", 0, 9990, 100 }},
+		{ "Used Wh", F_NUMERIC|F_CALLBACK,  .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", .step = 100 /* don't show decimals */ }, do_set_wh }},
 		{},
 	}}},
 	{ "Motor", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
@@ -191,18 +206,31 @@ const struct configtree_t cfgroot[] = {
 	{ "Various", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
 		{ "Fast stop", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pedal_cadence_fast_stop), disable_enable } },
 		{ "Lights current", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_adc_lights_current_offset), 0, "steps", 1, 4 }},
-//		{ "Odometer", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_odometer_x10), 1, "km", 1, 4 }}, FIXME
-		{},
-	}}},
-	{ "Display", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{},
-		{},
+		{ "Odometer", F_NUMERIC|F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_odometer_x10), 1, "km", 0, INT32_MAX }, do_set_odometer }},
+		{ "Auto power off", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_lcd_power_off_time_minutes), 0, "min", 0, 255 }},
+		{ "Reset BLE peers", F_BUTTON, .action = do_reset_ble },
+		{ "Reset all settings", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 18, (const struct configtree_t[]) {
+			{ "Confirm reset all", F_BUTTON, .action = do_reset_all },
+			{}
+		}}},
+		{}
 	}}},
 	{ "Technical", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{},
+		{ "ADC battery current", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_adc_battery_current), 0, "" }},
+		{ "ADC throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_adc_throttle), 0, ""}},
+		{ "Throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_throttle), 0, ""}},
+		{ "ADC torque sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_adc_pedal_torque_sensor), 0, ""}},
+		{ "Pedal side", F_OPTIONS|F_RO, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pas_pedal_right), (const char*[]) { "left", "right"} }},
+		{ "Weight with offset", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight_with_offset), 0, "kg" }},
+		{ "Weight", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight), 0, "kg" }},
+		{ "Cadence", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_cadence), 0, "rpm" }},
+		{ "PWM duty-cycle", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_duty_cycle), 0, "" }},
+		{ "Motor speed", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_motor_speed_erps), 0, "" }},
+		{ "Motor FOC", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_foc_angle), 0, "" }},
+		{ "Hall sensors", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_hall_sensors), 0, "" }},
 		{},
 	}}},
-	{ NULL, 0 },
+	{}
 };
 
 static void scroller_reset(struct scroller_state *st)
@@ -453,7 +481,11 @@ static void cfg_button(int but)
 		}
 
 		if(but & M_CLICK) {
-			ptr_set(edit_item->ptr, edit_value);
+			if(edit_item->flags & F_CALLBACK) {
+				edit_item->numeric_cb->callback(edit_value);
+			} else {
+				ptr_set(edit_item->ptr, edit_value);
+			}
 			edit_item = 0;
 		}
 
@@ -527,9 +559,52 @@ static void do_reset_trip_b(const struct configtree_t *ign)
 	stack_pop();
 }
 
+static void do_reset_ble(const struct configtree_t *ign)
+{
+#if defined(NRF51)
+	// TODO: fist disable any connection
+	// Warning: Use this (pm_peers_delete) function only when not connected or connectable. If a peer is or becomes connected
+	// or a PM_PEER_DATA_FUNCTIONS function is used during this procedure (until the success or failure event happens),
+	// the behavior is undefined.
+	pm_peers_delete();
+#endif
+	stack_pop();
+}
+
+static void do_reset_all(const struct configtree_t *ign)
+{
+	eeprom_init_defaults();
+	showScreen(&screen_main);
+}
+
+static void do_set_wh(int wh)
+{
+	reset_wh();
+	ui_vars.ui32_wh_x10_offset = wh;
+}
+
+static void do_set_odometer(int v)
+{
+	// FIXME rt_vars?
+	rt_vars.ui32_odometer_x10 = v;
+}
+
+static void cfg_leave()
+{
+	// copied from common/configscreen
+	prepare_torque_sensor_calibration_table();
+
+	// save the variables on EEPROM
+	eeprom_write_variables();
+
+	// send the configurations to TSDZ2
+	if (g_motor_init_state == MOTOR_INIT_READY)
+		g_motor_init_state = MOTOR_INIT_SET_CONFIGURATIONS;
+}
 
 const struct screen screen_cfg = {
 	.enter = cfg_enter,
 	.idle = cfg_idle,
-	.button = cfg_button
+	.button = cfg_button,
+	.leave = cfg_leave
 };
