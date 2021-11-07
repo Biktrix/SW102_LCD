@@ -7,530 +7,239 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-const
-#include "font_full.xbm"
-DEFINE_FONT(full, 
-	" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
-	5,7,11,20,26,37,46,48,52,56,62,70,72,76,78,83,90,96,103,110,117,124,131,138,145,152,154,156,165,174,183,189,201,210,217,224,232,239,245,253,261,263,267,274,280,289,297,305,312,320,328,335,343,351,360,372,380,388,396,399,404,407,414,421,424,431,438,444,451,458,463,470,477,479,482,488,490,500,507,514,521,528,533,539,544,551,558,568,575,582,588,594,596,602
-);
+#include "screen_cfg_utils.h"
+
 extern const struct screen screen_main;
 
-enum {
-	F_SUBMENU=1,
-	F_BUTTON,
-	F_NUMERIC,
-	F_OPTIONS,
-	F_TYPEMASK=0xff,
-	F_RO=0x100, 
-	F_CALLBACK=0x200
+static void cfg_button_repeat(bool speedup);
+
+struct ss_cfg_list {
+	const struct scroller_config *cfg;
+	struct scroller_state sst;
 };
 
-struct configtree_t;
-
-static void do_reset_trip_a(const struct configtree_t *ign);
-static void do_reset_trip_b(const struct configtree_t *ign);
-static void do_reset_ble(const struct configtree_t *ign);
-static void do_reset_all(const struct configtree_t *ign);
-
-static void do_set_wh(int wh);
-static void do_set_odometer(int wh);
-
-typedef void (cfgaction_t)(const struct configtree_t *ign);
-
-struct cfgptr_t {
-	void *ptr; int size;
+struct ss_cfg_edit {
+	struct ss_cfg_list *parent;
+	struct scroller_config cfg;
+	struct scroller_state sst;
+	const struct configtree_t *item;
+	int step, base, value;
 };
 
-struct cfgnumeric_t {
-	struct cfgptr_t ptr;
-	int decimals;
-	const char *unit;
-	int min, max, step;
-};
-
-typedef void (wr_callback_t)(int value);
-
-struct cfgnumeric_cb_t {
-	struct cfgnumeric_t numeric;
-	wr_callback_t *callback;
-};
-
-static int ptr_get(const struct cfgptr_t *it)
+static void cfg_draw_common(struct scroller_state *sst, const struct scroller_config *cfg, int *edit_value)
 {
-	if(it->size == 1) {
-		return *((unsigned char*)it->ptr);
-	} else if(it->size == 2) {
-		return *((unsigned short*)it->ptr);
-	} else if(it->size == 4) {
-		return *((unsigned int*)it->ptr);
+	const struct configtree_t * it = scroller_get(sst, cfg);
+	int type = it->flags & F_TYPEMASK;
+	if(type == F_NUMERIC) {
+		char buf[20];
+		int y = cfg->winy + 16;
+		int val = edit_value ? *edit_value : ptr_get(it->ptr);
+		numeric2string(it->numeric, val, buf, true);
+		font_text(&font_full, 32, y, buf, AlignCenter | DrawInvert);
 	}
-	return 0;
-}
 
-static void ptr_set(const struct cfgptr_t *it, int v)
-{
-	if(it->size == 1) {
-		*((unsigned char*)it->ptr) = v;
-	} else if(it->size == 2) {
-		*((unsigned short*)it->ptr) = v;
-	} else if(it->size == 4) {
-		*((unsigned int*)it->ptr) = v;
+	if(type == F_OPTIONS) {
+		int y = cfg->winy + 16;
+		int val = edit_value ? *edit_value : ptr_get(it->ptr);
+		font_text(&font_full, 32, y, it->options->options[val], AlignCenter | DrawInvert);
 	}
 }
 
-static void numeric2string(const struct cfgnumeric_t *num, int v, char *out, bool include_unit)
+static void cfg_list_idle(void *_it)
 {
-	int draw_decimals = num->decimals;
-	if(num->step >= 100 && (num->step % 100) == 0)
-		draw_decimals-=2;
-	else if(num->step >= 10 && (num->step % 10) == 0)
-		draw_decimals--;
+	struct ss_cfg_list *scr = _it;
+	cfg_button_repeat(false);
+	scroller_draw_list(&scr->sst, scr->cfg);
+	scroller_draw_item(&scr->sst, scr->cfg);
+	cfg_draw_common(&scr->sst, scr->cfg, NULL);
+}
 
-	if(draw_decimals < 0)
-		draw_decimals = 0;
+static void cfg_list_push(const struct scroller_config *it);
+static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg);
+static void cfg_list_button(void *_it, int but, int increment)
+{
+	struct ss_cfg_list *scr = _it;
+	(void)increment;
+	but = scroller_button(&scr->sst, scr->cfg, but, 1);
 
-	// drop unneeded decimals
-	for(int i=0;i < num->decimals - draw_decimals;i++)
-		v /= 10;
+	if(but & ONOFF_CLICK) {
+		sstack_pop();
+		if(!sstack_current) {
+			showScreen(&screen_main);
+			return;
+		}
+	}
 
-	if(draw_decimals > 0) {
-		int div = 1;
-		for(int i=0;i<draw_decimals;i++) div*=10;
-		if(include_unit)
-			sprintf(out, "%d.%d %s", v/div, v%div, num->unit);
-		else
-			sprintf(out, "%d.%d", v/div, v%div);
+	if(but & M_CLICK) {
+		const struct configtree_t * it = scroller_get(&scr->sst, scr->cfg);
+		int type = it->flags & F_TYPEMASK;
+		if(it->flags & F_RO) {
+			// nop
+		} else if(type == F_SUBMENU) {
+			cfg_list_push(it->submenu);
 
-	} else {
-		if(include_unit)
-			sprintf(out, "%d %s", v, num->unit);
-		else
-			sprintf(out, "%d", v);
+		} else if(type == F_BUTTON) {
+			it->action(it);
+
+		} else if(type == F_NUMERIC || type == F_OPTIONS) {
+			cfg_edit_push(it, scr->cfg);
+		}
 	}
 }
 
-struct cfgoptions_t {
-	struct cfgptr_t ptr;
-	const char **options;
+static const struct stack_class cfg_list_class = {
+	sizeof(struct ss_cfg_list),
+	.idle = cfg_list_idle,
+	.button = cfg_list_button,
 };
 
-#define PTRSIZE(a) 	{ &(a), sizeof(a) }
-
-struct scroller_config;
-
-struct configtree_t {
-	const char *text;
-	int flags;
-	union {
-		const struct scroller_config *submenu;
-		cfgaction_t *action;
-		const struct cfgptr_t *ptr;
-		const struct cfgnumeric_t *numeric;
-		const struct cfgnumeric_cb_t *numeric_cb;
-		const struct cfgoptions_t *options;
-	};
-};
-
-static const char *disable_enable[] = { "disable", "enable", 0 };
-static const char *off_on[] = { "off", "on", 0 };
-static const char *left_right[] = { "left", "right", 0 };
-
-typedef const char *(scroller_item_callback)(const struct scroller_config *cfg, int index, bool testonly);
-
-struct scroller_config {
-	int pitch, winy, winh;
-	const struct configtree_t *list;
-	scroller_item_callback *cb;
-};
-
-struct scroller_state {
-	int xscroll, yscroll, cidx;
-};
-
-const struct configtree_t cfgroot[] = {
-	{ "Trip memory", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 18, (const struct configtree_t[]) {
-		{ "Reset trip A", F_BUTTON, .action = do_reset_trip_a },
-		{ "Reset trip B", F_BUTTON, .action = do_reset_trip_b },
-		{},
-	}}},
-	{ "Wheel", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Max speed", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.wheel_max_speed_x10), 1, "km/h", 10, 990, 10 }},
-		{ "Circumference", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui16_wheel_perimeter), 0, "mm", 750, 3000, 10 }},
-		{},
-	}}},
-	{ "Battery", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Max current", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_battery_max_current), 0, "A", 1, 20 }},
- 		{ "Cut-off voltage", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_low_voltage_cut_off_x10), 1, "V", 160, 630 }},
-		{ "Resistance", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_pack_resistance_x1000), 0, "mohm", 0, 1000 }},
-		{ "Voltage", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_voltage_soc_x10), 1, "V" }},
-		{ "Est. resistance", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_pack_resistance_estimated_x1000), 0, "mohm" }},
-		{ "Power loss", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_power_loss), 0, "W" }},
-		{},
-	}}},
-	{ "Charge", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Reset voltage", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_voltage_reset_wh_counter_x10), 1, "V", 160, 630 }},
-		{ "Total capacity", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10_100_percent), 1, "Wh", 0, 9990, 100 }},
-		{ "Used Wh", F_NUMERIC|F_CALLBACK,  .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", 0, 9990, 100 }, do_set_wh }},
-		{},
-	}}},
-	{ "Motor", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Motor voltage", F_OPTIONS, .options = &(const struct cfgoptions_t){ PTRSIZE(ui_vars.ui8_motor_type), (const char*[]){ "48V", "36V", 0}}},
-		{ "Max current", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_max_current), 0, "A", 1, 20 }},
-		{ "Current ramp", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_ramp_up_amps_per_second_x10), 1, "A", 4, 100 }},
-		{ "Control mode", F_OPTIONS, .options = &(const struct cfgoptions_t){ PTRSIZE(ui_vars.ui8_motor_current_control_mode), (const char*[]){ "power", "torque", 0}}},
-		{ "Min current", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_current_min_adc), 0, "steps", 0, 13 }},
-		{ "Field weakening", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_field_weakening), disable_enable } },
-		{},
-	}}},
-	{ "Torque sensor", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "ADC Threshold", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_torque_sensor_adc_threshold), 0, "", 5, 100 }},
-		{ "Startup assist", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_motor_assistance_startup_without_pedal_rotation), disable_enable }},
-		{ "Coast brake", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_coast_brake_enable), disable_enable }},
-		{ "Coast brake ADC", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_coast_brake_adc), 0, "", 5, 255 }},
-		{ "Sensor filter", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_torque_sensor_filter), 0, "", 0, 100 }},
-		{ "Start pedal ground", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_torque_sensor_calibration_pedal_ground), left_right }},
-		{ "Calibration", 0 },
-		{},
-	}}},
-	{ "Assist", 0, },
-	{ "Walk assist", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_walk_assist_feature_enabled), disable_enable } },
-		{ "Levels", 0 },
-		{},
-	}}},
-	{ "Temperature", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Temp. sensor", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_temperature_limit_feature_enabled), disable_enable } },
-		{ "Min limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_temperature_min_value_to_limit), 0, "C", 30, 100 }},
-		{ "Max limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_temperature_max_value_to_limit), 0, "C", 30, 100 }},
-		{},
-	}}},
-	{ "Street mode", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_street_mode_function_enabled), disable_enable } },
-		{ "Current status", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_street_mode_enabled), off_on } },
-		{ "At startup", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_street_mode_enabled), (const char*[]){ "no change", "activate", 0 } }},
-		{ "Hotkey", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_street_mode_hotkey_enabled), disable_enable } },
-		{ "Speed limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_street_mode_speed_limit), 0, "km/h", 1, 99 }},
-		{ "Power limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_street_mode_power_limit), 0, "W", 25, 1000, 25 }},
-		{ "Throttle", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_street_mode_throttle_enabled), disable_enable } },
-		{},
-	}}},
-	{ "Various", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "Fast stop", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pedal_cadence_fast_stop), disable_enable } },
-		{ "Lights current", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_adc_lights_current_offset), 0, "steps", 1, 4 }},
-		{ "Odometer", F_NUMERIC|F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_odometer_x10), 1, "km", 0, INT32_MAX }, do_set_odometer }},
-		{ "Auto power off", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_lcd_power_off_time_minutes), 0, "min", 0, 255 }},
-		{ "Reset BLE peers", F_BUTTON, .action = do_reset_ble },
-		{ "Reset all settings", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 18, (const struct configtree_t[]) {
-			{ "Confirm reset all", F_BUTTON, .action = do_reset_all },
-			{}
-		}}},
-		{}
-	}}},
-	{ "Technical", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
-		{ "ADC battery current", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_adc_battery_current), 0, "" }},
-		{ "ADC throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_adc_throttle), 0, ""}},
-		{ "Throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_throttle), 0, ""}},
-		{ "ADC torque sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_adc_pedal_torque_sensor), 0, ""}},
-		{ "Pedal side", F_OPTIONS|F_RO, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pas_pedal_right), left_right }},
-		{ "Weight with offset", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight_with_offset), 0, "kg" }},
-		{ "Weight", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight), 0, "kg" }},
-		{ "Cadence", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_cadence), 0, "rpm" }},
-		{ "PWM duty-cycle", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_duty_cycle), 0, "" }},
-		{ "Motor speed", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_motor_speed_erps), 0, "" }},
-		{ "Motor FOC", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_foc_angle), 0, "" }},
-		{ "Hall sensors", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_hall_sensors), 0, "" }},
-		{},
-	}}},
-	{}
-};
-
-static void scroller_reset(struct scroller_state *st)
+static void cfg_list_push(const struct scroller_config *it)
 {
-	st->cidx = st->xscroll = st->yscroll = 0;
+	struct ss_cfg_list *ss_it = sstack_alloc(&cfg_list_class);
+	scroller_reset(&ss_it->sst);
+	ss_it->cfg = it;
+	sstack_push();
 }
 
-#define INVERTED_DRAW 1
-
-static const char * default_scroller_item_callback(const struct scroller_config *cfg, int index, bool testonly)
+static void cfg_edit_idle(void *_it)
 {
-	return cfg->list[index].text;
+	struct ss_cfg_edit *scr = _it;
+	cfg_button_repeat(true);
+	scroller_draw_list(&scr->sst, &scr->cfg);
+	scroller_draw_item(&scr->parent->sst, scr->parent->cfg);
+	cfg_draw_common(&scr->parent->sst, scr->parent->cfg, &scr->value);
 }
 
-static void scroller_draw_list(struct scroller_state *st, const struct scroller_config *cfg)
-{
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
-
-	if(st->yscroll > 0)
-		st->yscroll-=2;
-	if(st->yscroll < 0)
-		st->yscroll+=2;
-
-	for(int i=-1;i + st->cidx >= 0 && i > -5;i--){
-		int y = cfg->winy + cfg->pitch * i + st->yscroll;
-		font_text(&font_full, 32, y, cb(cfg, st->cidx + i, false), AlignCenter);
-	}
-
-	for(int i=1;i < 5;i++){
-		const char *text = cb(cfg, st->cidx+i, false);
-		if(!text)
-			break;
-		int y = cfg->winy + cfg->winh + cfg->pitch * (i-1) + st->yscroll;
-		font_text(&font_full, 32, y, text, AlignCenter);
-	}
-}
-
-static void scroller_draw_item(struct scroller_state *st, const struct scroller_config *cfg)
-{
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
-
-	// frame for the current selection
-#if !INVERTED_DRAW
-	fill_rect(1,cfg->winy-2,62,1, true);
-	fill_rect(0,cfg->winy-2,1,cfg->winh, true);
-	fill_rect(63,cfg->winy-2,1,cfg->winh, true);
-	fill_rect(1,cfg->winy-1,62,cfg->winh-2, false);
-	fill_rect(1,cfg->winy-2+cfg->winh-1,62,1, true);
-#else	
-	fill_rect(0,cfg->winy-2,64,cfg->winh, true);
+#include <stddef.h>
+#ifndef CONTAINER_OF
+#define CONTAINER_OF(ptr, type, member)                 \
+        (type *)((char *)ptr - offsetof(type, member))
 #endif
-
-	// current selection, scrolling
-	int fl = font_length(&font_full, cfg->list[st->cidx].text);
-	if(fl < 60) { 
-		st->xscroll = (fl-64)/2;
-	} else {
-		if(-st->xscroll+fl < 50)
-			st->xscroll = -10;
-		if(!(tick&3)) 
-			st->xscroll++;
-	}
-	
-	font_text(&font_full, -st->xscroll, cfg->winy, cb(cfg, st->cidx, false), AlignLeft | (INVERTED_DRAW ? DrawInvert : 0));
-}
-
-static int scroller_button(struct scroller_state *st, const struct scroller_config *cfg, int but, int increment)
-{
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
-
-	if(but & UP_PRESS) {
-		if(st->cidx > 0) {
-			st->cidx -= increment;
-			if(st->cidx < 0)
-				st->cidx = 0;
-
-			st->yscroll = -cfg->pitch;
-			st->xscroll = 0;
-			but &= ~UP_PRESS;
-		}
-	}
-
-	if(but & DOWN_PRESS) {
-		if(cb(cfg, st->cidx+1, true)) {
-			++st->cidx;
-			st->yscroll = cfg->pitch;
-			st->xscroll = 0;
-			but &= ~DOWN_PRESS;
-
-			for(int i=1;i<increment;i++) 
-				if(cb(cfg, st->cidx+1, true))
-					++st->cidx;
-		}
-	}
-
-	return but;
-}
-		
-static const struct configtree_t *scroller_get(struct scroller_state *st, const struct scroller_config *cfg)
-{
-	return &cfg->list[st->cidx];
-}
-
-#define STACK_MAX 3
-const struct scroller_config root = { 20, 58, 18, cfgroot };
-static struct scroller_state sst[STACK_MAX];
-static const struct scroller_config *current[STACK_MAX];
-static int stackdepth = 0;
-
-static void stack_pop()
-{
-	int i;
-	for(int i=0;i<stackdepth;i++){
-		sst[i]=sst[i+1];
-		current[i]=current[i+1];
-	}
-
-	--stackdepth;
-}
-
-static void stack_push(const struct scroller_config *it)
-{
-	++stackdepth;
-	for(int i=stackdepth;i>0;i--){
-		sst[i] = sst[i-1];
-		current[i] = current[i-1];
-	}
-
-	*current = it;
-	scroller_reset(sst);
-}
-
-static void cfg_enter()
-{
-	*current = &root;
-	stackdepth = 0;
-	scroller_reset(sst);
-}
-
-static const struct configtree_t *edit_item;
-static int edit_step, edit_base;
-static int edit_value;
-static struct scroller_config edit_cfg;
-static struct scroller_state edit_sst;
 
 static const char * edit_options_cb(const struct scroller_config *cfg, int index, bool testonly)
 {
-	return edit_item->options->options[index];
+	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
+	return owner->item->options->options[index];
 }
 
-static int get_editable_numeric_value(int index)
+static int get_editable_numeric_value(struct ss_cfg_edit *owner, int index)
 {
 	if(index == 0)
-		return edit_item->numeric->min;
+		return owner->item->numeric->min;
 
-	if(edit_base + edit_step * index > edit_item->numeric->max && edit_base + edit_step * (index-1) < edit_item->numeric->max)
-		return edit_item->numeric->max;
+	if(owner->base + owner->step * index > owner->item->numeric->max 
+			&& owner->base + owner->step * (index-1) < owner->item->numeric->max)
+		return owner->item->numeric->max;
 
-	return edit_base + edit_step * index;
+	return owner->base + owner->step * index;
 }
 
-static int get_editable_numeric_index(int value)
+static int get_editable_numeric_index(struct ss_cfg_edit *owner, int value)
 {
-	if(value == edit_item->numeric->min)
+	if(value == owner->item->numeric->min)
 		return 0;
 
-	return (value - edit_base) / edit_step;
+	return (value - owner->base) / owner->step;
 }
 
 static const char *edit_numeric_cb(const struct scroller_config *cfg, int index, bool testonly)
 {
+	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
 	static char buf[20];
-	int v = get_editable_numeric_value(index);
-	if(v > edit_item->numeric->max)
+	int v = get_editable_numeric_value(owner, index);
+	if(v > owner->item->numeric->max)
 		return NULL;
 
 	if(testonly)
 		return "";
 
-	numeric2string(edit_item->numeric, v, buf, false);
+	numeric2string(owner->item->numeric, v, buf, false);
 	return buf;
 }
 
-static void cfg_button_repeat();
+static void cfg_edit_button(void *_it, int but, int increment)
+{
+	struct ss_cfg_edit *scr = _it;
+	int type = scr->item->flags & F_TYPEMASK;
+	but = scroller_button(&scr->sst, &scr->cfg, but, increment);
+
+	if(type == F_NUMERIC) {
+		scr->value = get_editable_numeric_value(scr, scr->sst.cidx);
+
+	} else {
+		scr->value = scr->sst.cidx;
+	}
+
+	if(but & ONOFF_CLICK) {
+		sstack_pop();
+		return;
+	}
+
+	if(but & M_CLICK) {
+		if(scr->item->flags & F_CALLBACK) {
+			scr->item->numeric_cb->callback(scr->value);
+		} else {
+			ptr_set(scr->item->ptr, scr->value);
+		}
+		sstack_pop();
+		return;
+	}
+}
+
+static const struct stack_class cfg_edit_class = {
+	sizeof(struct ss_cfg_edit),
+	.idle = cfg_edit_idle,
+	.button = cfg_edit_button,
+};
+
+static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg)
+{
+	struct ss_cfg_edit *ss_it = sstack_alloc(&cfg_edit_class);
+	ss_it->parent = (struct ss_cfg_list*)sstack_current->userdata;
+
+	int type = it->flags & F_TYPEMASK;
+
+	if(type == F_NUMERIC) {
+		ss_it->item = it;
+		ss_it->step = it->numeric->step;
+		if(!ss_it->step)
+			ss_it->step = 1;
+		ss_it->base = it->numeric->min;
+		ss_it->cfg = *cfg;
+		ss_it->cfg.cb = edit_numeric_cb;
+		scroller_reset(&ss_it->sst);
+		ss_it->value = ptr_get(it->ptr);
+		ss_it->sst.cidx = get_editable_numeric_index(ss_it, ss_it->value);
+
+	} else if(type == F_OPTIONS) {
+		ss_it->item = it;
+		ss_it->cfg = *cfg;
+		ss_it->cfg.cb = edit_options_cb;
+		scroller_reset(&ss_it->sst);
+		ss_it->value = ptr_get(it->ptr);
+		ss_it->sst.cidx = ss_it->value;
+	}
+
+	sstack_push();
+}
+
+extern const struct scroller_config cfg_root;
+static void cfg_enter()
+{
+	sstack_reset();
+	cfg_list_push(&cfg_root);
+}
+
 static void cfg_idle()
 {
-	cfg_button_repeat();
-
 	clear_all();
-	if(edit_item) {
-		scroller_draw_list(&edit_sst, &edit_cfg);
-	} else {
-		scroller_draw_list(sst, *current);
-	}
-
-	scroller_draw_item(sst, *current);
-
-	const struct configtree_t * it = scroller_get(sst, *current);
-	int type = it->flags & F_TYPEMASK;
-	if(type == F_NUMERIC) {
-		char buf[20];
-		int y = (*current)->winy + 16;
-		int val = edit_item ? edit_value : ptr_get(it->ptr);
-		numeric2string(it->numeric, val, buf, true);
-		font_text(&font_full, 32, y, buf, AlignCenter | (INVERTED_DRAW ? DrawInvert : 0));
-	}
-
-	if(type == F_OPTIONS) {
-		int y = (*current)->winy + 16;
-		int val = edit_item ? edit_value : ptr_get(it->ptr);
-		font_text(&font_full, 32, y, it->options->options[val], AlignCenter | (INVERTED_DRAW ? DrawInvert : 0));
-	}
+	sstack_idle();
 	lcd_refresh();
 }
 
 static void cfg_handle_button(int but, int increment)
 {
-	if(edit_item) {
-		int type = edit_item->flags & F_TYPEMASK;
-		but = scroller_button(&edit_sst, &edit_cfg, but, increment);
-
-		if(type == F_NUMERIC) {
-			edit_value = get_editable_numeric_value(edit_sst.cidx);
-
-		} else {
-			edit_value = edit_sst.cidx;
-		}
-
-		if(but & ONOFF_CLICK) {
-			edit_item = 0;
-		}
-
-		if(but & M_CLICK) {
-			if(edit_item->flags & F_CALLBACK) {
-				edit_item->numeric_cb->callback(edit_value);
-			} else {
-				ptr_set(edit_item->ptr, edit_value);
-			}
-			edit_item = 0;
-		}
-
-	} else {
-		but = scroller_button(sst, *current, but, 1);
-
-		if(but & ONOFF_CLICK) {
-			// back
-			if(stackdepth == 0) {
-				showScreen(&screen_main);
-				return;
-
-			} else {
-				stack_pop();
-			}
-		}
-
-		if(but & M_CLICK) {
-			const struct configtree_t * it = scroller_get(sst, *current);
-			int type = it->flags & F_TYPEMASK;
-			if(it->flags & F_RO) {
-				// nop
-			} else if(type == F_SUBMENU) {
-				stack_push(it->submenu);
-
-			} else if(type == F_BUTTON) {
-				it->action(it);
-
-			} else if(type == F_NUMERIC) {
-				edit_item = it;
-				edit_step = edit_item->numeric->step;
-				if(!edit_step)
-					edit_step = 1;
-				edit_base = edit_item->numeric->min;
-
-				edit_cfg = **current;
-				edit_cfg.cb = edit_numeric_cb;
-				scroller_reset(&edit_sst);
-				edit_value = ptr_get(it->ptr);
-				edit_sst.cidx = get_editable_numeric_index(edit_value);
-
-			} else if(type == F_OPTIONS) {
-				edit_item = it;
-				edit_cfg = **current;
-				edit_cfg.cb = edit_options_cb;
-				scroller_reset(&edit_sst);
-				edit_value = ptr_get(it->ptr);
-				edit_sst.cidx = edit_value;
-			}
-		}
-	}
+	sstack_button(but, increment);
 }
 
 // button repeat logic
@@ -558,9 +267,9 @@ static int repeat_increments[] = {
 	10, 1, INT32_MAX	// then repeat every 20ms, by 10 increments. Odometer setting mode :)
 };
 
-static int repeat_button(int counter)
+static int repeat_button(int counter, bool speedup)
 {
-	if(!edit_item)
+	if(!speedup)
 		return (counter % 14)? 0 : 1; // regular repeat: 280ms
 	else {
 		for(int i=0;;i+=3) {
@@ -574,70 +283,17 @@ static int repeat_button(int counter)
 	}
 }
 
-static void cfg_button_repeat()
+static void cfg_button_repeat(bool speedup)
 {
 	if(up_hold >= 0) {
-		int n = repeat_button(++up_hold);
+		int n = repeat_button(++up_hold, speedup);
 		if(n) cfg_handle_button(UP_PRESS, n);
 	}
 
 	if(down_hold >= 0) {
-		int n = repeat_button(++down_hold);
+		int n = repeat_button(++down_hold, speedup);
 		if(n) cfg_handle_button(DOWN_PRESS, n);
 	}
-}
-
-static void do_reset_trip_a(const struct configtree_t *ign)
-{
-	// FIXME is accessing rt_vars safe here?
-	rt_vars.ui32_trip_a_distance_x1000 = 0;
-	rt_vars.ui32_trip_a_time = 0;
-	rt_vars.ui16_trip_a_avg_speed_x10 = 0;
-	rt_vars.ui16_trip_a_max_speed_x10 = 0;
-	stack_pop();
-}
-
-static void do_reset_trip_b(const struct configtree_t *ign)
-{
-	rt_vars.ui32_trip_b_distance_x1000 = 0;
-	rt_vars.ui32_trip_b_time = 0;
-	rt_vars.ui16_trip_b_avg_speed_x10 = 0;
-	rt_vars.ui16_trip_b_max_speed_x10 = 0;
-	stack_pop();
-}
-
-#if defined(NRF51)
-#include "peer_manager.h"
-#endif
-
-static void do_reset_ble(const struct configtree_t *ign)
-{
-#if defined(NRF51)
-	// TODO: fist disable any connection
-	// Warning: Use this (pm_peers_delete) function only when not connected or connectable. If a peer is or becomes connected
-	// or a PM_PEER_DATA_FUNCTIONS function is used during this procedure (until the success or failure event happens),
-	// the behavior is undefined.
-	pm_peers_delete();
-#endif
-	stack_pop();
-}
-
-static void do_reset_all(const struct configtree_t *ign)
-{
-	eeprom_init_defaults();
-	showScreen(&screen_main);
-}
-
-static void do_set_wh(int wh)
-{
-	reset_wh();
-	ui_vars.ui32_wh_x10_offset = wh;
-}
-
-static void do_set_odometer(int v)
-{
-	// FIXME rt_vars?
-	rt_vars.ui32_odometer_x10 = v;
 }
 
 static void cfg_leave()

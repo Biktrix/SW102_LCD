@@ -63,6 +63,8 @@ SRC_FILES += \
   $(PROJ_DIR)/src/sw102/screen_boot.c \
   $(PROJ_DIR)/src/sw102/screen_main.c \
   $(PROJ_DIR)/src/sw102/screen_cfg.c \
+  $(PROJ_DIR)/src/sw102/screen_cfg_utils.c \
+  $(PROJ_DIR)/src/sw102/screen_cfg_tree.c \
   $(PROJ_DIR)/src/sw102/app_uart_fifo_mod.c \
   $(PROJ_DIR)/src/sw102/uart.c \
   $(COMMON_DIR)/src/utils.c \
