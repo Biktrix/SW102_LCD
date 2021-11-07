@@ -136,6 +136,7 @@ struct configtree_t {
 
 static const char *disable_enable[] = { "disable", "enable", 0 };
 static const char *off_on[] = { "off", "on", 0 };
+static const char *left_right[] = { "left", "right", 0 };
 
 typedef const char *(scroller_item_callback)(const struct scroller_config *cfg, int index);
 
@@ -172,7 +173,7 @@ const struct configtree_t cfgroot[] = {
 	{ "Charge", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
 		{ "Reset voltage", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_voltage_reset_wh_counter_x10), 1, "V", 160, 630 }},
 		{ "Total capacity", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10_100_percent), 1, "Wh", 0, 9990, 100 }},
-		{ "Used Wh", F_NUMERIC|F_CALLBACK,  .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", .step = 100 /* don't show decimals */ }, do_set_wh }},
+		{ "Used Wh", F_NUMERIC|F_CALLBACK,  .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", 0, 9990, 100 }, do_set_wh }},
 		{},
 	}}},
 	{ "Motor", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
@@ -184,9 +185,22 @@ const struct configtree_t cfgroot[] = {
 		{ "Field weakening", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_field_weakening), disable_enable } },
 		{},
 	}}},
-	{ "Torque sensor", 0, },
+	{ "Torque sensor", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
+		{ "ADC Threshold", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_torque_sensor_adc_threshold), 0, "", 5, 100 }},
+		{ "Startup assist", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_motor_assistance_startup_without_pedal_rotation), disable_enable }},
+		{ "Coast brake", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_coast_brake_enable), disable_enable }},
+		{ "Coast brake ADC", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_coast_brake_adc), 0, "", 5, 255 }},
+		{ "Sensor filter", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_torque_sensor_filter), 0, "", 0, 100 }},
+		{ "Start pedal ground", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_torque_sensor_calibration_pedal_ground), left_right }},
+		{ "Calibration", 0 },
+		{},
+	}}},
 	{ "Assist", 0, },
-	{ "Walk assist", 0, },
+	{ "Walk assist", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
+		{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_walk_assist_feature_enabled), disable_enable } },
+		{ "Levels", 0 },
+		{},
+	}}},
 	{ "Temperature", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, (const struct configtree_t[]) {
 		{ "Temp. sensor", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_temperature_limit_feature_enabled), disable_enable } },
 		{ "Min limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_temperature_min_value_to_limit), 0, "C", 30, 100 }},
@@ -220,7 +234,7 @@ const struct configtree_t cfgroot[] = {
 		{ "ADC throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_adc_throttle), 0, ""}},
 		{ "Throttle sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_throttle), 0, ""}},
 		{ "ADC torque sensor", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_adc_pedal_torque_sensor), 0, ""}},
-		{ "Pedal side", F_OPTIONS|F_RO, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pas_pedal_right), (const char*[]) { "left", "right"} }},
+		{ "Pedal side", F_OPTIONS|F_RO, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_pas_pedal_right), left_right }},
 		{ "Weight with offset", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight_with_offset), 0, "kg" }},
 		{ "Weight", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_weight), 0, "kg" }},
 		{ "Cadence", F_NUMERIC|F_RO, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_pedal_cadence), 0, "rpm" }},
@@ -558,6 +572,10 @@ static void do_reset_trip_b(const struct configtree_t *ign)
 	rt_vars.ui16_trip_b_max_speed_x10 = 0;
 	stack_pop();
 }
+
+#if defined(NRF51)
+#include "peer_manager.h"
+#endif
 
 static void do_reset_ble(const struct configtree_t *ign)
 {
