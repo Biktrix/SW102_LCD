@@ -18,11 +18,6 @@ enum {
 	UP_RELEASE   =0x0040000,
 	DOWN_RELEASE =0x0080000,
 	M_RELEASE    =0x0100000,
-	
-	ONOFF_REPEAT =0x0200000,
-	UP_REPEAT    =0x0400000,
-	DOWN_REPEAT  =0x0800000,
-	M_REPEAT     =0x1000000,
 };
 
 void showScreen(const struct screen *new_screen);

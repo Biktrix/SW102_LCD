@@ -21,7 +21,6 @@ void buttons_clear_all_events(void)
 // 20ms
 
 #define LONGCLICK_THRESHOLD (1500/20)
-#define REPEAT_PERIOD (320/20)
 
 void buttons_clock(void)
 {
@@ -44,9 +43,6 @@ void buttons_clock(void)
 			hold[i]++;
 			if(hold[i] == LONGCLICK_THRESHOLD)
 				events |= ONOFF_LONG_CLICK<<i;
-
-			if((hold[i] % REPEAT_PERIOD)==0) 
-				events |= ONOFF_REPEAT << i;
 		}
 
 		if(release & bit) {

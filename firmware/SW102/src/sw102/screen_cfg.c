@@ -7,9 +7,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define UP_PRESS_OR_REPEAT (UP_PRESS|UP_REPEAT)
-#define DOWN_PRESS_OR_REPEAT (DOWN_PRESS|DOWN_REPEAT)
-
 const
 #include "font_full.xbm"
 DEFINE_FONT(full, 
@@ -138,7 +135,7 @@ static const char *disable_enable[] = { "disable", "enable", 0 };
 static const char *off_on[] = { "off", "on", 0 };
 static const char *left_right[] = { "left", "right", 0 };
 
-typedef const char *(scroller_item_callback)(const struct scroller_config *cfg, int index);
+typedef const char *(scroller_item_callback)(const struct scroller_config *cfg, int index, bool testonly);
 
 struct scroller_config {
 	int pitch, winy, winh;
@@ -254,7 +251,7 @@ static void scroller_reset(struct scroller_state *st)
 
 #define INVERTED_DRAW 1
 
-static const char * default_scroller_item_callback(const struct scroller_config *cfg, int index)
+static const char * default_scroller_item_callback(const struct scroller_config *cfg, int index, bool testonly)
 {
 	return cfg->list[index].text;
 }
@@ -270,11 +267,11 @@ static void scroller_draw_list(struct scroller_state *st, const struct scroller_
 
 	for(int i=-1;i + st->cidx >= 0 && i > -5;i--){
 		int y = cfg->winy + cfg->pitch * i + st->yscroll;
-		font_text(&font_full, 32, y, cb(cfg, st->cidx + i), AlignCenter);
+		font_text(&font_full, 32, y, cb(cfg, st->cidx + i, false), AlignCenter);
 	}
 
 	for(int i=1;i < 5;i++){
-		const char *text = cb(cfg, st->cidx+i);
+		const char *text = cb(cfg, st->cidx+i, false);
 		if(!text)
 			break;
 		int y = cfg->winy + cfg->winh + cfg->pitch * (i-1) + st->yscroll;
@@ -308,47 +305,36 @@ static void scroller_draw_item(struct scroller_state *st, const struct scroller_
 			st->xscroll++;
 	}
 	
-	font_text(&font_full, -st->xscroll, cfg->winy, cb(cfg, st->cidx), AlignLeft | (INVERTED_DRAW ? DrawInvert : 0));
+	font_text(&font_full, -st->xscroll, cfg->winy, cb(cfg, st->cidx, false), AlignLeft | (INVERTED_DRAW ? DrawInvert : 0));
 }
 
-static int scroller_button(struct scroller_state *st, const struct scroller_config *cfg, int but, int *speedup)
+static int scroller_button(struct scroller_state *st, const struct scroller_config *cfg, int but, int increment)
 {
-	static int up_hold = 0, down_hold = 0;
 	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
 
-	if(but & UP_PRESS_OR_REPEAT) {
-		up_hold++;
+	if(but & UP_PRESS) {
 		if(st->cidx > 0) {
-			--st->cidx;
+			st->cidx -= increment;
+			if(st->cidx < 0)
+				st->cidx = 0;
+
 			st->yscroll = -cfg->pitch;
 			st->xscroll = 0;
-			but &= ~UP_PRESS_OR_REPEAT;
+			but &= ~UP_PRESS;
 		}
 	}
 
-	if(but & UP_RELEASE)
-		up_hold=0;
-
-	if(but & DOWN_PRESS_OR_REPEAT) {
-		down_hold++;
-		if(cb(cfg, st->cidx+1)) {
+	if(but & DOWN_PRESS) {
+		if(cb(cfg, st->cidx+1, true)) {
 			++st->cidx;
 			st->yscroll = cfg->pitch;
 			st->xscroll = 0;
-			but &= ~DOWN_PRESS_OR_REPEAT;
+			but &= ~DOWN_PRESS;
+
+			for(int i=1;i<increment;i++) 
+				if(cb(cfg, st->cidx+1, true))
+					++st->cidx;
 		}
-	}
-
-	if(but & DOWN_RELEASE)
-		down_hold = 0;
-
-	if(speedup) {
-		if(up_hold > 10 || down_hold > 10)
-			*speedup = 20;
-		else if(up_hold > 5 || down_hold > 5)
-			*speedup = 5;
-		else
-			*speedup = 1;
 	}
 
 	return but;
@@ -401,7 +387,7 @@ static int edit_value;
 static struct scroller_config edit_cfg;
 static struct scroller_state edit_sst;
 
-static const char * edit_options_cb(const struct scroller_config *cfg, int index)
+static const char * edit_options_cb(const struct scroller_config *cfg, int index, bool testonly)
 {
 	return edit_item->options->options[index];
 }
@@ -425,19 +411,25 @@ static int get_editable_numeric_index(int value)
 	return (value - edit_base) / edit_step;
 }
 
-static const char *edit_numeric_cb(const struct scroller_config *cfg, int index)
+static const char *edit_numeric_cb(const struct scroller_config *cfg, int index, bool testonly)
 {
 	static char buf[20];
 	int v = get_editable_numeric_value(index);
 	if(v > edit_item->numeric->max)
 		return NULL;
 
+	if(testonly)
+		return "";
+
 	numeric2string(edit_item->numeric, v, buf, false);
 	return buf;
 }
 
+static void cfg_button_repeat();
 static void cfg_idle()
 {
+	cfg_button_repeat();
+
 	clear_all();
 	if(edit_item) {
 		scroller_draw_list(&edit_sst, &edit_cfg);
@@ -465,26 +457,14 @@ static void cfg_idle()
 	lcd_refresh();
 }
 
-static void cfg_button(int but)
+static void cfg_handle_button(int but, int increment)
 {
 	if(edit_item) {
 		int type = edit_item->flags & F_TYPEMASK;
-		int speedup;
-		but = scroller_button(&edit_sst, &edit_cfg, but, &speedup);
+		but = scroller_button(&edit_sst, &edit_cfg, but, increment);
 
 		if(type == F_NUMERIC) {
 			edit_value = get_editable_numeric_value(edit_sst.cidx);
-
-			if(speedup) {
-				edit_step = edit_item->numeric->step;
-				if(!edit_step)
-					edit_step = 1;
-				edit_step *= speedup;
-
-				edit_base = edit_item->numeric->min + (edit_value) % edit_step;
-
-				edit_sst.cidx = get_editable_numeric_index(edit_value);
-			}
 
 		} else {
 			edit_value = edit_sst.cidx;
@@ -503,9 +483,8 @@ static void cfg_button(int but)
 			edit_item = 0;
 		}
 
-
 	} else {
-		but = scroller_button(sst, *current, but, NULL);
+		but = scroller_button(sst, *current, but, 1);
 
 		if(but & ONOFF_CLICK) {
 			// back
@@ -551,6 +530,60 @@ static void cfg_button(int but)
 				edit_sst.cidx = edit_value;
 			}
 		}
+	}
+}
+
+// button repeat logic
+// we move this here instead of buttons.c, since we need variable-rate button repeat
+static int up_hold=-1, down_hold=-1;
+static void cfg_button(int but)
+{
+	if(but & UP_PRESS)
+		up_hold = 0;
+	if(but & UP_RELEASE)
+		up_hold = -1;
+	if(but & DOWN_PRESS)
+		down_hold = 0;
+	if(but & DOWN_RELEASE)
+		down_hold = -1;
+
+	cfg_handle_button(but, 1);
+}
+
+static int repeat_increments[] = { 
+	1, 12, 60,  	// repeat every 240ms until 1.2s
+	1, 8, 120, 	// then repeat every 160ms until 2.4s
+	1, 4, 180,	// then repeat every 80ms until 3.6s
+	1, 1, 250,	// then repeat every 20ms until 5s
+	10, 1, INT32_MAX	// then repeat every 20ms, by 10 increments. Odometer setting mode :)
+};
+
+static int repeat_button(int counter)
+{
+	if(!edit_item)
+		return (counter % 14)? 0 : 1; // regular repeat: 280ms
+	else {
+		for(int i=0;;i+=3) {
+			if(counter <= repeat_increments[i+2]) {
+				if(!(counter % repeat_increments[i+1]))
+					return repeat_increments[i];
+				else
+					return 0;
+			}
+		}
+	}
+}
+
+static void cfg_button_repeat()
+{
+	if(up_hold >= 0) {
+		int n = repeat_button(++up_hold);
+		if(n) cfg_handle_button(UP_PRESS, n);
+	}
+
+	if(down_hold >= 0) {
+		int n = repeat_button(++down_hold);
+		if(n) cfg_handle_button(DOWN_PRESS, n);
 	}
 }
 
