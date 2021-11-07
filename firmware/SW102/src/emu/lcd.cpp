@@ -16,7 +16,7 @@ extern "C"  {
 #include "lcd.h"
 #include "common.h"
 #include "button.h"
-uint8_t frameBuffer[16][64];
+union framebuffer_t framebuffer;
 }
 
 #include <QWidget>
@@ -81,12 +81,10 @@ extern "C" void lcd_init(void)
 extern "C" void lcd_refresh(void)
 {
 	auto optr = (uint8_t*)oled->display.bits();
-	for(int y=0;y<128;y++) {
-		uint8_t page = y / 8;
-		uint8_t pixel = y % 8;
 
+	for(int y=0;y<128;y++) {
 		for(int x=0;x<64;x++) {
-			*optr++ = (frameBuffer[page][x] >> pixel) & 1 ? 255 : 0;
+			*optr++ = (framebuffer.u32[x*(128/32)+(y/32)] >> (y&31)) & 1 ? 255 : 0;
 		}
 	}
 	oled->repaint();

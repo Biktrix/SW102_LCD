@@ -3,7 +3,6 @@
 
 void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int w, int h, int flags)
 {
-	int y,x;
 	const unsigned char *srcptr = src->data;
 
 	if(x0 < 0) {
@@ -25,14 +24,54 @@ void img_draw_clip(const struct image *src, int x0, int y0, int cx, int cy, int 
 	if(w <= 0 || h <= 0)
 		return;
 
-	srcptr += cy * ((src->w+7)/8);
+	srcptr += cx * ((src->h+7)/8) + (cy/8);
+	cy&=7;
 
-	for(y=0;y < h;y++) {
-		unsigned char bits;
-		for(x=0; x < w;x++) 
-			if(!((srcptr[(x+cx)/8] >> ((x+cx)&7)) & 1))
-				lcd_pset(x0+x, y+y0, !(flags & DrawInvert));
-		srcptr += (src->w+7)/8;
+	int lshift = 8-cy+(y0&7);
+	bool skipfirst = false;
+	if(lshift >= 8) {
+		lshift -= 8;
+		skipfirst = true;
+	}
+	unsigned char lmask = 0xff<<(y0&7);
+	int K = h-8+(y0&7);
+	int loops = K/8;
+	unsigned char rmask = 0;
+	if(K >= 0) 
+		rmask = 0xff>>(8-(K&7));
+	else 
+		lmask&=(0xff>>(8-((h+(y0&7))&7)));
+
+	unsigned char *dst = framebuffer.u8 + x0*(128/8) + (y0/8);
+
+#define BLIT_LOOP(op) \
+	for(int xx=0;xx<w;xx++) { 				\
+		unsigned char *dptr = dst;			\
+		const unsigned char *sptr = srcptr;		\
+\
+		unsigned short tmp = (*sptr++ >> cy) << (y0&7);	\
+		if(!skipfirst) tmp |= (*sptr++ << lshift);	\
+\
+		*dptr++ op ((~tmp) & lmask);			\
+\
+		for(int i=0;i<loops;i++) {			\
+			tmp=(*sptr++ << lshift) | (tmp>>8);	\
+			*dptr++ op (~tmp);			\
+		}						\
+\
+		if(rmask) {					\
+			tmp=(*sptr++ << lshift) | (tmp>>8);	\
+			*dptr op ((~tmp) & rmask); 		\
+		}	\
+\
+		dst += (128/8);	\
+		srcptr += (src->h+7)/8;	\
+	}
+
+	if(flags & DrawInvert) {
+		BLIT_LOOP(&=~)
+	} else {
+		BLIT_LOOP(|=)
 	}
 }
 
@@ -56,15 +95,38 @@ void fill_rect(int x0, int y0, int w, int h, bool v)
 		return;
 
 	int y,x;
-	for(y=0;y<h;y++)
-		for(x=0;x<w;x++)
-			lcd_pset(x0+x,y0+y, v);
+	uint32_t *dst = framebuffer.u32 + x0*(128/32) + y0/32;
+	uint32_t lmask = (~0U) << (y0&31);
+	uint32_t rmask = (~0U) >> ((32-((y0+h)&31))&31);
+	
+	int loops = (y0+h-1)/32 - (y0/32) + 1;
+#define FILL_LOOP(op) \
+	for(x=0;x<w;x++) { 		\
+		uint32_t *dptr=dst;	\
+		uint32_t mask = lmask; 	\
+		for(y=0;y<loops;y++) {	\
+			if(y == loops - 1)	\
+				mask &= rmask;	\
+			*dptr++ op mask; \
+			mask = ~0; \
+		} \
+		dst += (128/32); \
+	}
+
+	if(v)
+		FILL_LOOP(|=)
+	else
+		FILL_LOOP(&=~)
 }
 
 void draw_hline(int x0, int x1, int y)
 {
-	while(x0 < x1)
-		lcd_pset(x0++, y, true);
+	uint8_t *dptr = framebuffer.u8 + x0 * (128/8) + y/8;
+	uint8_t px = 1<<(y&7);
+	while(x0++ < x1) {
+		*dptr |= px;
+		dptr += 128/8;
+	}
 }
 
 int font_getchar(const struct font *fnt, char c, int *cx)

@@ -28,10 +28,12 @@ static void spi_init(void);
 
 /* Variable definition */
 
-/* Frame buffer in RAM with same structure as LCD memory --> 16 pages a 64 columns (1 kB) */
-uint8_t frameBuffer[16][64];
+/* Frame buffer in RAM with same structure as LCD memory, aligned vertically.
+ * 128 consecutive bits represent a single column of the display */
+union framebuffer_t framebuffer;
 
-/* Init sequence sampled by casainho from original SW102 display */
+/* Init sequence sampled by casainho from original SW102 display
+ * Adjusted for vertical image orientation. */
 static const uint8_t init_array[] = {
     0xAE, // 11. display on
     0xA8, 0x3F, // set multiplex ratio 3f
@@ -39,7 +41,7 @@ static const uint8_t init_array[] = {
     0xC0, // set common scan dir
     0xD3, 0x60, // ???
     0xDC, 0x00,  // set display start line
-    0x20, // set memory address mode
+    0x21, // set memory address mode
     0x81, 0xFF, // Set contrast level (POR value is 0x80, but closed source software uses 0xBF
     0xA0, // set segment remap
     0xA4, // set normal display mode
@@ -122,18 +124,18 @@ void lcd_refresh(void)
     send_cmd(cmd, sizeof(cmd));
   }
 
-  uint8_t addr = 0xB0;
-  static uint8_t pagecmd[] = { 0, 0x00, 0x10 };
+  static uint8_t pagecmd[] = { 0xb0, 0x00, 0x10 };
 
-  for (uint8_t i = 0; i < 16; i++)
+  for (uint8_t i = 0; i < 64; i++)
   {
-    // New page address
-    pagecmd[0] = addr++;
+    // New column address
+    pagecmd[1] = (i&15);
+    pagecmd[2] = 0x10|(i>>4);
     send_cmd(pagecmd, sizeof(pagecmd));
 
     // send page data
     set_data();
-    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, &frameBuffer[i][0], 64, NULL, 0));
+    APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi, framebuffer.u8+(128/8)*i, 128/8, NULL, 0));
   }
 }
 

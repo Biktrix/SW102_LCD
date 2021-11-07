@@ -5,9 +5,11 @@ struct image {
 	const unsigned char *data;
 	unsigned short w,h;
 };
+// the images need to be stored in a transposed format to facilitate faster bittling
+// mogrify -flip -rotate 90 *.xbm
 #define DEFINE_IMAGE(name) \
 	const struct image img_ ## name = { \
-		name ## _bits, name ## _width, name ## _height \
+		name ## _bits, name ## _height, name ## _width \
 	};
 
 struct font {
@@ -23,7 +25,7 @@ struct font {
 		&img_font_ ## name, \
 		chars, \
 		sizeof(chars)-1, \
-		(const unsigned short[]){ 0, __VA_ARGS__, font_ ## name ## _width } \
+		(const unsigned short[]){ 0, __VA_ARGS__, font_ ## name ## _height } \
 	};
 
 enum drawflags_t {

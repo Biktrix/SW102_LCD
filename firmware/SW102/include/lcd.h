@@ -15,18 +15,14 @@ void lcd_init(void);
 void lcd_refresh(void); // Call to flush framebuffer to SPI device
 void lcd_set_backlight_intensity(uint8_t level);
 
-// for now this has sufficient performance
-// as an improvement, we could change OLED RAM organization to vertical addressing mode
-// then the framebuffer would be entirely linear, albeit in a vertical orientation
-// this would allow for efficient blit routines
-extern uint8_t frameBuffer[16][64];
+extern union framebuffer_t {
+	uint8_t u8[128*64/8];
+	uint32_t u32[128*64/32];
+} framebuffer;
 
 static __attribute__((always_inline)) inline void lcd_pset(unsigned int x, unsigned int y, bool v) {
-	uint8_t page = y / 8;
-	uint8_t pixel = y % 8;
-
-	if (v)
-		frameBuffer[page][x] |= 1<<pixel;
+	if(v)
+		framebuffer.u8[x*(128/8) + (y/8)] |= 1<<(y&7);
 	else
-		frameBuffer[page][x] &= ~(1<<pixel);
+		framebuffer.u8[x*(128/8) + (y/8)] &= ~(1<<(y&7));
 }
