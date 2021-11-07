@@ -20,7 +20,7 @@ void buttons_clear_all_events(void)
 
 // 20ms
 
-#define LONGCLICK_THRESHOLD (1500/20)
+#define LONGCLICK_THRESHOLD (1000/20)
 
 void buttons_clock(void)
 {
