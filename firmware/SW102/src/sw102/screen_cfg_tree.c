@@ -9,9 +9,10 @@ static void do_reset_trip_a(const struct configtree_t *ign);
 static void do_reset_trip_b(const struct configtree_t *ign);
 static void do_reset_ble(const struct configtree_t *ign);
 static void do_reset_all(const struct configtree_t *ign);
+void cfg_push_assist_screen(const struct configtree_t *ign);
 
-static void do_set_wh(int wh);
-static void do_set_odometer(int wh);
+static bool do_set_wh(const struct configtree_t *ign, int wh);
+static bool do_set_odometer(const struct configtree_t *ign, int wh);
 
 static const char *disable_enable[] = { "disable", "enable", 0 };
 static const char *off_on[] = { "off", "on", 0 };
@@ -62,7 +63,7 @@ static const struct configtree_t cfgroot[] = {
 		{ "Calibration", 0 },
 		{},
 	}}},
-	{ "Assist", 0, },
+	{ "Assist", F_BUTTON, .action = cfg_push_assist_screen },
 	{ "Walk assist", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, 0, 128, (const struct configtree_t[]) {
 		{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_walk_assist_feature_enabled), disable_enable } },
 		{ "Levels", 0 },
@@ -116,6 +117,34 @@ static const struct configtree_t cfgroot[] = {
 
 const struct scroller_config cfg_root = { 20, 58, 18, 0, 128,  cfgroot };
 
+static int tmp_rescale = 100;
+bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
+
+bool do_change_assist_levels(const struct configtree_t *ign, int newv);
+bool rescale_update(const struct configtree_t *it, int value);
+void rescale_preview(const struct configtree_t *it, int value);
+void rescale_revert(const struct configtree_t *it);
+void do_resize_assist_levels(const struct configtree_t *ign);
+void do_interpolate_assist_levels(const struct configtree_t *ign);
+
+const struct scroller_config cfg_assist = { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
+	{ "Assist levels", F_NUMERIC | F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui8_number_of_assist_levels), 0, "", 1, 20 }, do_change_assist_levels }},
+	{ "Rescale all", F_NUMERIC | F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(tmp_rescale), 0, "%", 25, 400, 5 }, rescale_update, rescale_preview, rescale_revert }},
+	{}
+}, enumerate_assist_levels };
+
+const struct scroller_config cfg_levels_extend = { 20, 26, 18, 0, 76, (const struct configtree_t[]) {
+	{ "Interpolate", F_BUTTON, .action = do_interpolate_assist_levels },
+	{ "Add higher", F_BUTTON, .action = do_resize_assist_levels },
+	{}
+}};
+
+const struct scroller_config cfg_levels_truncate = { 20, 26, 18, 0, 76, (const struct configtree_t[]) {
+	{ "Interpolate", F_BUTTON, .action = do_interpolate_assist_levels },
+	{ "Keep lowest", F_BUTTON, .action = do_resize_assist_levels },
+	{}
+}};
+
 static void do_reset_trip_a(const struct configtree_t *ign)
 {
 	// FIXME is accessing rt_vars safe here?
@@ -157,16 +186,18 @@ static void do_reset_all(const struct configtree_t *ign)
 	showScreen(&screen_main);
 }
 
-static void do_set_wh(int wh)
+static bool do_set_wh(const struct configtree_t *ign, int wh)
 {
 	reset_wh();
 	ui_vars.ui32_wh_x10_offset = wh;
+	return true;
 }
 
-static void do_set_odometer(int v)
+static bool do_set_odometer(const struct configtree_t *ign, int v)
 {
 	// FIXME rt_vars?
 	rt_vars.ui32_odometer_x10 = v;
+	return true;
 }
 
 

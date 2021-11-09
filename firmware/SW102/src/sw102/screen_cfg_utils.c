@@ -151,14 +151,19 @@ void scroller_reset(struct scroller_state *st)
 
 #define INVERTED_DRAW 1
 
-static const char * default_scroller_item_callback(const struct scroller_config *cfg, int index, bool testonly)
+bool configtree_scroller_item_callback(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
 {
-	return cfg->list[index].text;
+	const struct configtree_t *list = cfg->list;
+	if(!list[index].scrollitem.text)
+		return false;
+	if(it)
+		*it = &list[index].scrollitem;
+	return true;
 }
 
 void scroller_draw_list(struct scroller_state *st, const struct scroller_config *cfg)
 {
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
+	scroller_item_callback *cb = cfg->cb ? cfg->cb : configtree_scroller_item_callback;
 
 	if(st->yscroll > 0)
 		st->yscroll-=2;
@@ -169,30 +174,40 @@ void scroller_draw_list(struct scroller_state *st, const struct scroller_config 
 		int y = cfg->winy + cfg->pitch * i + st->yscroll;
 		if(y + font_full.img->h <= cfg->y0)
 			break;
-		font_text(&font_full, 32, y, cb(cfg, st->cidx + i, false), AlignCenter);
+
+		const struct scroller_item_t *it;
+		if(!cb(cfg, st->cidx + i, &it))
+			break;
+
+		font_text(&font_full, 32, y, it->text, AlignCenter);
 	}
 
 	for(int i=1;;i++){
-		const char *text = cb(cfg, st->cidx+i, false);
-		if(!text)
-			break;
 		int y = cfg->winy + cfg->winh + cfg->pitch * (i-1) + st->yscroll;
 		if(y >= cfg->y1)
 			break;
 
-		font_text(&font_full, 32, y, text, AlignCenter);
+		const struct scroller_item_t *it;
+		if(!cb(cfg, st->cidx + i, &it))
+			break;
+
+		font_text(&font_full, 32, y, it->text, AlignCenter);
 	}
 }
 
 void scroller_draw_item(struct scroller_state *st, const struct scroller_config *cfg)
 {
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
+	scroller_item_callback *cb = cfg->cb ? cfg->cb : configtree_scroller_item_callback;
 
 	// frame for the current selection
 	fill_rect(0,cfg->winy-2,64,cfg->winh, true);
 
+	const struct scroller_item_t *it;
+	if(!cb(cfg, st->cidx, &it)) // oops
+		return;
+
 	// current selection, scrolling
-	int fl = font_length(&font_full, cfg->list[st->cidx].text);
+	int fl = font_length(&font_full, it->text);
 	if(fl < 60) { 
 		st->xscroll = (fl-64)/2;
 	} else {
@@ -202,12 +217,12 @@ void scroller_draw_item(struct scroller_state *st, const struct scroller_config 
 			st->xscroll++;
 	}
 	
-	font_text(&font_full, -st->xscroll, cfg->winy, cb(cfg, st->cidx, false), AlignLeft | DrawInvert);
+	font_text(&font_full, -st->xscroll, cfg->winy, it->text, AlignLeft | DrawInvert);
 }
 
 int scroller_button(struct scroller_state *st, const struct scroller_config *cfg, int but, int increment)
 {
-	scroller_item_callback *cb = cfg->cb ? cfg->cb : default_scroller_item_callback;
+	scroller_item_callback *cb = cfg->cb ? cfg->cb : configtree_scroller_item_callback;
 
 	if(but & UP_PRESS) {
 		if(st->cidx > 0) {
@@ -222,14 +237,14 @@ int scroller_button(struct scroller_state *st, const struct scroller_config *cfg
 	}
 
 	if(but & DOWN_PRESS) {
-		if(cb(cfg, st->cidx+1, true)) {
+		if(cb(cfg, st->cidx+1, NULL)) {
 			++st->cidx;
 			st->yscroll = cfg->pitch;
 			st->xscroll = 0;
 			but &= ~DOWN_PRESS;
 
 			for(int i=1;i<increment;i++) 
-				if(cb(cfg, st->cidx+1, true))
+				if(cb(cfg, st->cidx+1, NULL))
 					++st->cidx;
 		}
 	}
@@ -237,7 +252,11 @@ int scroller_button(struct scroller_state *st, const struct scroller_config *cfg
 	return but;
 }
 		
-const struct configtree_t *scroller_get(struct scroller_state *st, const struct scroller_config *cfg)
+const struct configtree_t *scroller_configtree_get(struct scroller_state *st, const struct scroller_config *cfg)
 {
-	return &cfg->list[st->cidx];
+	scroller_item_callback *cb = cfg->cb ? cfg->cb : configtree_scroller_item_callback;
+	const struct scroller_item_t *it;
+	if(!cb(cfg, st->cidx, &it))
+		return NULL;
+	return (const struct configtree_t*)it;
 }

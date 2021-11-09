@@ -6,6 +6,7 @@
 #include "eeprom.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "screen_cfg_utils.h"
 
@@ -26,9 +27,11 @@ struct ss_cfg_edit {
 	int step, base, value;
 };
 
+// this makes sense only if the scroller doesn't use a callback
+// or the callback returns data consistent with scroller_configtree_get()
 static void cfg_draw_common(struct scroller_state *sst, const struct scroller_config *cfg, int *edit_value)
 {
-	const struct configtree_t * it = scroller_get(sst, cfg);
+	const struct configtree_t * it = scroller_configtree_get(sst, cfg);
 	int type = it->flags & F_TYPEMASK;
 	if(type == F_NUMERIC) {
 		char buf[20];
@@ -51,6 +54,7 @@ static void cfg_list_idle(void *_it)
 	cfg_button_repeat(false);
 	scroller_draw_list(&scr->sst, scr->cfg);
 	scroller_draw_item(&scr->sst, scr->cfg);
+
 	cfg_draw_common(&scr->sst, scr->cfg, NULL);
 }
 
@@ -71,7 +75,7 @@ static void cfg_list_button(void *_it, int but, int increment)
 	}
 
 	if(but & M_CLICK) {
-		const struct configtree_t * it = scroller_get(&scr->sst, scr->cfg);
+		const struct configtree_t * it = scroller_configtree_get(&scr->sst, scr->cfg);
 		int type = it->flags & F_TYPEMASK;
 		if(it->flags & F_RO) {
 			// nop
@@ -93,12 +97,17 @@ static const struct stack_class cfg_list_class = {
 	.button = cfg_list_button,
 };
 
-static void cfg_list_push(const struct scroller_config *it)
+static void cfg_list_push_class(const struct scroller_config *it, const struct stack_class *klass)
 {
-	struct ss_cfg_list *ss_it = sstack_alloc(&cfg_list_class);
+	struct ss_cfg_list *ss_it = sstack_alloc(klass);
 	scroller_reset(&ss_it->sst);
 	ss_it->cfg = it;
 	sstack_push();
+}
+
+static void cfg_list_push(const struct scroller_config *it)
+{
+	cfg_list_push_class(it, &cfg_list_class);
 }
 
 static void cfg_edit_idle(void *_it)
@@ -116,10 +125,16 @@ static void cfg_edit_idle(void *_it)
         (type *)((char *)ptr - offsetof(type, member))
 #endif
 
-static const char * edit_options_cb(const struct scroller_config *cfg, int index, bool testonly)
+static bool edit_options_cb(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
 {
 	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
-	return owner->item->options->options[index];
+	static struct scroller_item_t tmpitem;
+	tmpitem.text = owner->item->options->options[index];
+	if(!tmpitem.text)
+		return false;
+	if(*it)
+		*it = &tmpitem;
+	return true;
 }
 
 static int get_editable_numeric_value(struct ss_cfg_edit *owner, int index)
@@ -142,27 +157,30 @@ static int get_editable_numeric_index(struct ss_cfg_edit *owner, int value)
 	return (value - owner->base) / owner->step;
 }
 
-static const char *edit_numeric_cb(const struct scroller_config *cfg, int index, bool testonly)
+static bool edit_numeric_cb(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
 {
-	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
 	static char buf[20];
+	static const struct scroller_item_t tmpitem = { buf };
+
+	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
 	int v = get_editable_numeric_value(owner, index);
 	if(v > owner->item->numeric->max)
-		return NULL;
+		return false;
 
-	if(testonly)
-		return "";
+	if(it) {
+		numeric2string(owner->item->numeric, v, buf, false);
+		*it = &tmpitem;
+	}
 
-	numeric2string(owner->item->numeric, v, buf, false);
-	return buf;
+	return true;
 }
 
 static void cfg_edit_button(void *_it, int but, int increment)
 {
 	struct ss_cfg_edit *scr = _it;
 	int type = scr->item->flags & F_TYPEMASK;
+	int oldval = scr->value;
 	but = scroller_button(&scr->sst, &scr->cfg, but, increment);
-
 	if(type == F_NUMERIC) {
 		scr->value = get_editable_numeric_value(scr, scr->sst.cidx);
 
@@ -170,18 +188,30 @@ static void cfg_edit_button(void *_it, int but, int increment)
 		scr->value = scr->sst.cidx;
 	}
 
+	if(scr->value != oldval && scr->item->flags & F_CALLBACK) {
+		if(scr->item->numeric_cb->preview)
+			scr->item->numeric_cb->preview(scr->item, scr->value);
+	}
+
 	if(but & ONOFF_CLICK) {
+		if(scr->item->flags & F_CALLBACK) {
+			if(scr->item->numeric_cb->revert)
+				scr->item->numeric_cb->revert(scr->item);
+		}
 		sstack_pop();
 		return;
 	}
 
 	if(but & M_CLICK) {
+		bool pop = true;
 		if(scr->item->flags & F_CALLBACK) {
-			scr->item->numeric_cb->callback(scr->value);
+			pop = scr->item->numeric_cb->update(scr->item, scr->value);
 		} else {
 			ptr_set(scr->item->ptr, scr->value);
 		}
-		sstack_pop();
+
+		if(pop)
+			sstack_pop();
 		return;
 	}
 }
@@ -192,9 +222,9 @@ static const struct stack_class cfg_edit_class = {
 	.button = cfg_edit_button,
 };
 
-static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg)
+static void cfg_edit_push_class(const struct configtree_t *it, const struct scroller_config *cfg, const struct stack_class *klass)
 {
-	struct ss_cfg_edit *ss_it = sstack_alloc(&cfg_edit_class);
+	struct ss_cfg_edit *ss_it = sstack_alloc(klass);
 	ss_it->parent = (struct ss_cfg_list*)sstack_current->userdata;
 
 	int type = it->flags & F_TYPEMASK;
@@ -223,6 +253,11 @@ static void cfg_edit_push(const struct configtree_t *it, const struct scroller_c
 	sstack_push();
 }
 
+static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg)
+{
+	cfg_edit_push_class(it, cfg, &cfg_edit_class);
+}
+
 extern const struct scroller_config cfg_root;
 static void cfg_enter()
 {
@@ -242,7 +277,7 @@ static void cfg_handle_button(int but, int increment)
 	sstack_button(but, increment);
 }
 
-// button repeat logic
+// button repeat logic ======================================================================
 // we move this here instead of buttons.c, since we need variable-rate button repeat
 static int up_hold=-1, down_hold=-1;
 static void cfg_button(int but)
@@ -295,6 +330,268 @@ static void cfg_button_repeat(bool speedup)
 		if(n) cfg_handle_button(DOWN_PRESS, n);
 	}
 }
+
+// assist screen ======================================================================
+static const int assist_menu_items = 2;
+static unsigned short preview_alevels[ASSIST_LEVEL_NUMBER];
+
+static void assist_draw_levels(int current)
+{
+	ui_vars_t *ui = get_ui_vars();
+	const int y0 = 76;
+	// clear some overflown parts of the scroller
+	fill_rect(0, y0, 64, 20, false);
+	
+	int topv_limit = INT32_MAX;
+	int topv_min = preview_alevels[ui->ui8_number_of_assist_levels-1];
+
+	if(current >= 0 && current < ui->ui8_number_of_assist_levels && preview_alevels[current] > 0) {
+		topv_limit = preview_alevels[current] * 10;
+	}
+
+	int topv = 2;
+	while(topv < topv_min) {
+		if(topv * 2 > topv_limit)
+			break;
+		topv *= 2;
+	}
+
+	char buf[10];
+	sprintf(buf, "%d", topv);
+	int x1 = font_text(&font_full, 0, y0, buf, AlignLeft);
+	for(int x=x1&(~1);x<64;x+=2)
+		lcd_pset(x, y0, true);
+
+	int bar_width = 65 / ui->ui8_number_of_assist_levels;
+	int bar_left = (64 - bar_width* ui->ui8_number_of_assist_levels)/2;
+	int bar_fill = bar_width - (bar_width > 16 ? 2 : 1);
+
+	for(int i=0;i < ui->ui8_number_of_assist_levels;i++) {
+		int v = preview_alevels[i];
+		if(v > topv) v = topv;
+		int height = v * (128-y0) / topv;
+		if(i == current && (tick & 8))
+			fill_rect(bar_left + i * bar_width, 128 - height, bar_fill, 1, true); // flashing
+		else
+			fill_rect(bar_left + i * bar_width, 128 - height, bar_fill, height, true);
+	}
+
+}
+
+extern const struct scroller_config cfg_assist;
+
+static void cfg_assist_idle(void *_it)
+{
+	struct ss_cfg_list *scr = _it;
+	cfg_list_idle(_it);
+	
+	int current = -1;
+	if(scr->cfg == &cfg_assist) // compute this only for the toplevel assist menu
+		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - assist_menu_items);
+
+	assist_draw_levels(current);
+}
+
+static void cfg_assist_sub_idle(void *_it)
+{
+	cfg_list_idle(_it);
+	assist_draw_levels(-1);
+}
+
+struct ss_cfg_edit_assist {
+	struct ss_cfg_edit edit;
+	int current;
+};
+
+static void cfg_assist_edit_idle(void *_it)
+{
+	struct ss_cfg_edit_assist *e = _it;
+	cfg_edit_idle(_it);
+	assist_draw_levels(e->current);
+}
+
+static const struct stack_class cfg_assist_edit_class = {
+	sizeof(struct ss_cfg_edit_assist),
+	.idle = cfg_assist_edit_idle,
+	.button = cfg_edit_button,
+};
+
+static void cfg_assist_button(void *_it, int but, int increment)
+{
+	struct ss_cfg_list *scr = _it;
+	if(but & M_CLICK) {
+		// ensure that submenus receive the current assist level so that the highlight can follow it
+		// the rest of the magic happens in enumerate_assist_levels called by scroller_configtree_get
+		int current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx-assist_menu_items);
+		
+		const struct configtree_t * it = scroller_configtree_get(&scr->sst, scr->cfg);
+		cfg_edit_push_class(it, scr->cfg, &cfg_assist_edit_class);
+		((struct ss_cfg_edit_assist*)sstack_current->userdata)->current = current;
+
+		return;
+	}
+
+	cfg_list_button(_it, but, increment);
+}
+
+static const struct stack_class cfg_assist_class = {
+	sizeof(struct ss_cfg_list),
+	.idle = cfg_assist_idle,
+	.button = cfg_assist_button,
+};
+
+static const struct stack_class cfg_assist_sub_class = {
+	sizeof(struct ss_cfg_list),
+	.idle = cfg_assist_sub_idle,
+	.button = cfg_list_button,
+};
+
+void cfg_push_assist_screen(const struct configtree_t *ign)
+{
+	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+	cfg_list_push_class(&cfg_assist, &cfg_assist_class);
+}
+
+static bool alevel_update(const struct configtree_t *it, int value)
+{
+	memcpy(ui_vars.ui16_assist_level_factor, preview_alevels, sizeof(preview_alevels));
+}
+
+static void alevel_preview(const struct configtree_t *it, int value)
+{
+	int level = (unsigned short*)it->numeric->ptr.ptr - ui_vars.ui16_assist_level_factor;
+	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) {
+		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i];
+		if(i <= level && preview_alevels[i] >= value)
+			preview_alevels[i] = value;
+		if(i >= level && preview_alevels[i] <= value)
+			preview_alevels[i] = value;
+	}
+}
+
+static void alevel_revert(const struct configtree_t *it)
+{
+	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+}
+
+bool rescale_update(const struct configtree_t *it, int value)
+{
+	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) 
+		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[i] * value / 100;
+}
+
+void rescale_preview(const struct configtree_t *it, int value)
+{
+	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) 
+		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] * value / 100;
+}
+
+void rescale_revert(const struct configtree_t *it)
+{
+	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+}
+
+bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
+{
+	if(index < assist_menu_items) {// regular menu
+		return configtree_scroller_item_callback(cfg, index, it);
+
+	} else {
+		int current = ui_vars.ui8_number_of_assist_levels - 1 - (index - assist_menu_items);
+		if(current < 0)
+			return false;
+
+		// assist levels
+		static struct cfgnumeric_cb_t alevel_numeric = {
+			{ PTRSIZE(ui_vars.ui16_assist_level_factor[0]), 0, "", 1, 2048 },
+			.update = alevel_update,
+			.preview = alevel_preview,
+			.revert = alevel_revert,
+		};
+		static char buf[10];
+		static const struct configtree_t alevel = {
+			{ buf } , F_NUMERIC | F_CALLBACK, .numeric_cb = &alevel_numeric
+		};
+
+		if(it) {
+			alevel_numeric.numeric.ptr.ptr = &ui_vars.ui16_assist_level_factor[current];
+			sprintf(buf, "Level %d", current+1);
+			*it = &alevel.scrollitem;
+		}
+		return true;
+	}
+	return false;
+}
+
+extern const struct scroller_config cfg_levels_extend, cfg_levels_truncate;
+static int tmp_assist_levels;
+
+bool do_change_assist_levels(const struct configtree_t *ign, int newv)
+{
+	int oldv = ui_vars.ui8_number_of_assist_levels;
+
+	if(newv == oldv)
+		return true;
+
+	if(newv == 1) { // it doesn't make much sense, but just crop in this case
+		ui_vars.ui8_number_of_assist_levels = 1;
+		return true;
+
+	} else  if(oldv == 1) { // same here, just duplicate the first level
+		for(int i=1;i<newv;i++)
+			preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[0];
+		ui_vars.ui8_number_of_assist_levels = newv;
+		return true;
+
+	} else if(newv > ui_vars.ui8_number_of_assist_levels)
+		cfg_list_push_class(&cfg_levels_extend, &cfg_assist_sub_class);
+	else
+		cfg_list_push_class(&cfg_levels_truncate, &cfg_assist_sub_class);
+
+	tmp_assist_levels = newv;
+	return false;
+}
+
+void do_resize_assist_levels(const struct configtree_t *ign)
+{
+	int oldv = ui_vars.ui8_number_of_assist_levels;
+	int newv = tmp_assist_levels;
+
+	for(int i = oldv; i < newv;i++) { // if extending, extrapolate linearly
+		// linear extrapolation
+		ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[i-1] * 2 - ui_vars.ui16_assist_level_factor[i-2];
+	}
+	ui_vars.ui8_number_of_assist_levels = newv;
+
+	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+	sstack_pop(); // extend/interpolate menu
+	sstack_pop(); // assist level spinner
+}
+
+void do_interpolate_assist_levels(const struct configtree_t *ign)
+{
+	// use preview_alevels as temporary
+	int oldv = ui_vars.ui8_number_of_assist_levels;
+	int newv = tmp_assist_levels;
+	preview_alevels[0] = ui_vars.ui16_assist_level_factor[0];
+
+	for(int i=1;i < newv-1;i++) {
+		int j = i * 256 * (oldv-1) / (newv-1);
+		int a = ui_vars.ui16_assist_level_factor[j>>8];
+		int b = ui_vars.ui16_assist_level_factor[(j>>8)+1];
+		int frac = j&255;
+		preview_alevels[i] = (a * (256-frac) + b * frac) >> 8;
+	}
+
+	preview_alevels[newv-1] = ui_vars.ui16_assist_level_factor[oldv-1];
+	memcpy(ui_vars.ui16_assist_level_factor, preview_alevels, sizeof(preview_alevels));
+
+	ui_vars.ui8_number_of_assist_levels = newv;
+	sstack_pop(); // extend/interpolate menu
+	sstack_pop(); // assist level spinner
+}
+
+// store the configuration on exit ======================================================================
 
 static void cfg_leave()
 {
