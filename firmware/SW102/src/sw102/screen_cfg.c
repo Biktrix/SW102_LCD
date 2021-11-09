@@ -24,7 +24,7 @@ struct ss_cfg_edit {
 	struct scroller_config cfg;
 	struct scroller_state sst;
 	const struct configtree_t *item;
-	int step, base, value;
+	int step, value;
 };
 
 // this makes sense only if the scroller doesn't use a callback
@@ -139,22 +139,23 @@ static bool edit_options_cb(const struct scroller_config *cfg, int index, const 
 
 static int get_editable_numeric_value(struct ss_cfg_edit *owner, int index)
 {
+	const struct cfgnumeric_t *num = owner->item->numeric;
 	if(index == 0)
-		return owner->item->numeric->min;
+		return num->max;
 
-	if(owner->base + owner->step * index > owner->item->numeric->max 
-			&& owner->base + owner->step * (index-1) < owner->item->numeric->max)
-		return owner->item->numeric->max;
-
-	return owner->base + owner->step * index;
+	int max_aligned = num->max - ((num->max - num->min) % owner->step) + owner->step;
+	return max_aligned - owner->step * index;
 }
 
 static int get_editable_numeric_index(struct ss_cfg_edit *owner, int value)
 {
-	if(value == owner->item->numeric->min)
+	const struct cfgnumeric_t *num = owner->item->numeric;
+	int max_aligned = num->max - ((num->max - num->min) % owner->step) + owner->step;
+
+	if(value == num->max)
 		return 0;
 
-	return (value - owner->base) / owner->step;
+	return (max_aligned - value) / owner->step;
 }
 
 static bool edit_numeric_cb(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
@@ -164,7 +165,7 @@ static bool edit_numeric_cb(const struct scroller_config *cfg, int index, const 
 
 	struct ss_cfg_edit *owner = CONTAINER_OF(cfg, struct ss_cfg_edit, cfg);
 	int v = get_editable_numeric_value(owner, index);
-	if(v > owner->item->numeric->max)
+	if(v > owner->item->numeric->max || v < owner->item->numeric->min)
 		return false;
 
 	if(it) {
@@ -234,7 +235,6 @@ static void cfg_edit_push_class(const struct configtree_t *it, const struct scro
 		ss_it->step = it->numeric->step;
 		if(!ss_it->step)
 			ss_it->step = 1;
-		ss_it->base = it->numeric->min;
 		ss_it->cfg = *cfg;
 		ss_it->cfg.cb = edit_numeric_cb;
 		scroller_reset(&ss_it->sst);
