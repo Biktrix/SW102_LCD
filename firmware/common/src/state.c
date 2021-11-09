@@ -178,10 +178,14 @@ void rt_send_tx_package(frame_type_t type) {
 	switch (type) {
 	  case FRAME_TYPE_PERIODIC:
       if (rt_vars.ui8_walk_assist) {
+        // walk assist level is specified in duty cycle units -> do not adjust
         ui8_usart1_tx_buffer[3] = (uint8_t) rt_vars.ui8_walk_assist_level_factor[((rt_vars.ui8_assist_level) - 1)];
         ui8_usart1_tx_buffer[4] = 0;
       } else if (rt_vars.ui8_assist_level) {
         uint16_t ui16_temp = rt_vars.ui16_assist_level_factor[((rt_vars.ui8_assist_level) - 1)];
+        // the assist level is specified for the reference motor voltage
+        // adjust by current battery voltage
+        ui16_temp = (unsigned int)ui16_temp * (rt_vars.ui8_motor_type ? 360 : 480) / rt_vars.ui16_battery_voltage_filtered_x10;
         ui8_usart1_tx_buffer[3] = (uint8_t) (ui16_temp & 0xff);
         ui8_usart1_tx_buffer[4] = (uint8_t) (ui16_temp >> 8);
       } else {

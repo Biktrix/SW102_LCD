@@ -147,4 +147,7 @@ struct configtree_t {
 	};
 };
 
-
+struct assist_scroller_config {
+	struct scroller_config scroller;
+	int n_menuitems;
+};

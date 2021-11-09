@@ -10,6 +10,7 @@ static void do_reset_trip_b(const struct configtree_t *ign);
 static void do_reset_ble(const struct configtree_t *ign);
 static void do_reset_all(const struct configtree_t *ign);
 void cfg_push_assist_screen(const struct configtree_t *ign);
+void cfg_push_walk_assist_screen(const struct configtree_t *ign);
 
 static bool do_set_wh(const struct configtree_t *ign, int wh);
 static bool do_set_odometer(const struct configtree_t *ign, int wh);
@@ -64,11 +65,7 @@ static const struct configtree_t cfgroot[] = {
 		{},
 	}}},
 	{ "Assist", F_BUTTON, .action = cfg_push_assist_screen },
-	{ "Walk assist", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, 0, 128, (const struct configtree_t[]) {
-		{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_walk_assist_feature_enabled), disable_enable } },
-		{ "Levels", 0 },
-		{},
-	}}},
+	{ "Walk assist", F_BUTTON, .action = cfg_push_walk_assist_screen },
 	{ "Temperature", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, 0, 128, (const struct configtree_t[]) {
 		{ "Temp. sensor", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_temperature_limit_feature_enabled), disable_enable } },
 		{ "Min limit", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui8_motor_temperature_min_value_to_limit), 0, "C", 30, 100 }},
@@ -119,6 +116,7 @@ const struct scroller_config cfg_root = { 20, 58, 18, 0, 128,  cfgroot };
 
 static int tmp_rescale = 100;
 bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
+bool enumerate_walk_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
 
 bool do_change_assist_levels(const struct configtree_t *ign, int newv);
 bool rescale_update(const struct configtree_t *it, int value);
@@ -127,11 +125,12 @@ void rescale_revert(const struct configtree_t *it);
 void do_resize_assist_levels(const struct configtree_t *ign);
 void do_interpolate_assist_levels(const struct configtree_t *ign);
 
-const struct scroller_config cfg_assist = { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
+const struct assist_scroller_config cfg_assist = { { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
 	{ "Assist levels", F_NUMERIC | F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui8_number_of_assist_levels), 0, "", 1, 20 }, do_change_assist_levels }},
 	{ "Rescale all", F_NUMERIC | F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(tmp_rescale), 0, "%", 25, 400, 5 }, rescale_update, rescale_preview, rescale_revert }},
-	{}
-}, enumerate_assist_levels };
+	// this is a template
+	{ (char[10]){}, F_NUMERIC | F_CALLBACK, .numeric_cb = &(struct cfgnumeric_cb_t) { { { 0, 0 }, 0, "%", 1, 10000 /* insane 100x assist max. */ } }}
+}, enumerate_assist_levels }, 2 };
 
 const struct scroller_config cfg_levels_extend = { 20, 26, 18, 0, 76, (const struct configtree_t[]) {
 	{ "Interpolate", F_BUTTON, .action = do_interpolate_assist_levels },
@@ -144,6 +143,12 @@ const struct scroller_config cfg_levels_truncate = { 20, 26, 18, 0, 76, (const s
 	{ "Keep lowest", F_BUTTON, .action = do_resize_assist_levels },
 	{}
 }};
+
+const struct assist_scroller_config cfg_walk_assist = { { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
+	{ "Feature", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_walk_assist_feature_enabled), disable_enable } },
+	// this is a template
+	{ (char[10]){}, F_NUMERIC | F_CALLBACK, .numeric_cb = &(struct cfgnumeric_cb_t) { { { 0, 0 }, 0, "%", 1, 100 } }}
+}, enumerate_assist_levels }, 1};
 
 static void do_reset_trip_a(const struct configtree_t *ign)
 {

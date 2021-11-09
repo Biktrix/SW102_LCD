@@ -132,7 +132,7 @@ static bool edit_options_cb(const struct scroller_config *cfg, int index, const 
 	tmpitem.text = owner->item->options->options[index];
 	if(!tmpitem.text)
 		return false;
-	if(*it)
+	if(it)
 		*it = &tmpitem;
 	return true;
 }
@@ -332,8 +332,51 @@ static void cfg_button_repeat(bool speedup)
 }
 
 // assist screen ======================================================================
-static const int assist_menu_items = 2;
-static unsigned short preview_alevels[ASSIST_LEVEL_NUMBER];
+// original firmware uses defines assist level as a factor:
+// 	output current = assist level * pedal power (or equivalent pedal power in torque mode)
+// we want:
+// 	output power = assist_level_new * pedal power
+// 	output current = assist_level_new * pedal power / output_voltage
+// this gives:
+// 	assist_level_new = assist_level * output_voltage
+//
+// assist_level_new can be simply understood as a power factor
+//
+// we will compute the assist level (as understood by the motor controller) at runtime based
+// and current battery voltage
+// 
+// it would be nice if the values stored in flash were approximately compatible with the old firmware
+// to achieve this, we scale them by a reference voltage, taken from the motor variant (36/48V)
+
+// the values in preview_alevels are simple power percentage factors
+// (a value of 100 means that the motor power equals pedal power)
+//
+// in case of walk assist, we don't change anything, the levels specify motor duty cycle
+static bool editing_walk_assist;
+static unsigned int preview_alevels[ASSIST_LEVEL_NUMBER];
+static void copy_alevels_to_preview()
+{
+	if(editing_walk_assist) {
+		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
+			preview_alevels[i] = ui_vars.ui8_walk_assist_level_factor[i];
+	} else {
+		int voltage = ui_vars.ui8_motor_type ? 36 : 48;
+		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
+			preview_alevels[i] = (ui_vars.ui16_assist_level_factor[i] * voltage + 5/* rounding*/) / 10;
+	}
+}
+
+static void copy_preview_to_alevels()
+{
+	if(editing_walk_assist) {
+		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
+			ui_vars.ui8_walk_assist_level_factor[i] = preview_alevels[i];
+	} else {
+		int voltage = ui_vars.ui8_motor_type ? 36 : 48;
+		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
+			ui_vars.ui16_assist_level_factor[i] = preview_alevels[i] * 10 / voltage;
+	}
+}
 
 static void assist_draw_levels(int current)
 {
@@ -349,7 +392,7 @@ static void assist_draw_levels(int current)
 		topv_limit = preview_alevels[current] * 10;
 	}
 
-	int topv = 2;
+	int topv = 25;
 	while(topv < topv_min) {
 		if(topv * 2 > topv_limit)
 			break;
@@ -357,7 +400,10 @@ static void assist_draw_levels(int current)
 	}
 
 	char buf[10];
-	sprintf(buf, "%d", topv);
+	if(topv > 100)
+		sprintf(buf, "%dx", topv/100);
+	else
+		sprintf(buf, "%d%%", topv);
 	int x1 = font_text(&font_full, 0, y0, buf, AlignLeft);
 	for(int x=x1&(~1);x<64;x+=2)
 		lcd_pset(x, y0, true);
@@ -378,7 +424,7 @@ static void assist_draw_levels(int current)
 
 }
 
-extern const struct scroller_config cfg_assist;
+extern const struct assist_scroller_config cfg_assist, cfg_walk_assist;
 
 static void cfg_assist_idle(void *_it)
 {
@@ -386,8 +432,10 @@ static void cfg_assist_idle(void *_it)
 	cfg_list_idle(_it);
 	
 	int current = -1;
-	if(scr->cfg == &cfg_assist) // compute this only for the toplevel assist menu
-		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - assist_menu_items);
+	if(scr->cfg == &cfg_assist.scroller) // compute this only for the toplevel assist menu
+		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - cfg_assist.n_menuitems);
+	else if(scr->cfg == &cfg_walk_assist.scroller) // or this one
+		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - cfg_assist.n_menuitems);
 
 	assist_draw_levels(current);
 }
@@ -422,7 +470,8 @@ static void cfg_assist_button(void *_it, int but, int increment)
 	if(but & M_CLICK) {
 		// ensure that submenus receive the current assist level so that the highlight can follow it
 		// the rest of the magic happens in enumerate_assist_levels called by scroller_configtree_get
-		int current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx-assist_menu_items);
+		int assist_menu_items = ((const struct assist_scroller_config*)scr->cfg)->n_menuitems;
+		int current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - assist_menu_items);
 		
 		const struct configtree_t * it = scroller_configtree_get(&scr->sst, scr->cfg);
 		cfg_edit_push_class(it, scr->cfg, &cfg_assist_edit_class);
@@ -448,20 +497,29 @@ static const struct stack_class cfg_assist_sub_class = {
 
 void cfg_push_assist_screen(const struct configtree_t *ign)
 {
-	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
-	cfg_list_push_class(&cfg_assist, &cfg_assist_class);
+	editing_walk_assist = false;
+	copy_alevels_to_preview();
+	cfg_list_push_class(&cfg_assist.scroller, &cfg_assist_class);
+}
+
+void cfg_push_walk_assist_screen(const struct configtree_t *ign)
+{
+	editing_walk_assist = true;
+	copy_alevels_to_preview();
+	cfg_list_push_class(&cfg_walk_assist.scroller, &cfg_assist_class);
 }
 
 static bool alevel_update(const struct configtree_t *it, int value)
 {
-	memcpy(ui_vars.ui16_assist_level_factor, preview_alevels, sizeof(preview_alevels));
+	copy_preview_to_alevels();
 }
 
 static void alevel_preview(const struct configtree_t *it, int value)
 {
-	int level = (unsigned short*)it->numeric->ptr.ptr - ui_vars.ui16_assist_level_factor;
+	int level = (unsigned int*)it->numeric->ptr.ptr - preview_alevels;
+	copy_alevels_to_preview();
+
 	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) {
-		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i];
 		if(i <= level && preview_alevels[i] >= value)
 			preview_alevels[i] = value;
 		if(i >= level && preview_alevels[i] <= value)
@@ -471,28 +529,32 @@ static void alevel_preview(const struct configtree_t *it, int value)
 
 static void alevel_revert(const struct configtree_t *it)
 {
-	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
-}
-
-bool rescale_update(const struct configtree_t *it, int value)
-{
-	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) 
-		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[i] * value / 100;
+	copy_alevels_to_preview();
 }
 
 void rescale_preview(const struct configtree_t *it, int value)
 {
+	copy_alevels_to_preview();
+
 	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) 
-		preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] * value / 100;
+		preview_alevels[i] = preview_alevels[i] * value / 100;
+}
+
+bool rescale_update(const struct configtree_t *it, int value)
+{
+	rescale_preview(it, value);
+	copy_preview_to_alevels();
 }
 
 void rescale_revert(const struct configtree_t *it)
 {
-	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+	copy_alevels_to_preview();
 }
 
 bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
 {
+	int assist_menu_items = ((const struct assist_scroller_config*)cfg)->n_menuitems;
+
 	if(index < assist_menu_items) {// regular menu
 		return configtree_scroller_item_callback(cfg, index, it);
 
@@ -501,22 +563,17 @@ bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const
 		if(current < 0)
 			return false;
 
-		// assist levels
-		static struct cfgnumeric_cb_t alevel_numeric = {
-			{ PTRSIZE(ui_vars.ui16_assist_level_factor[0]), 0, "", 1, 2048 },
-			.update = alevel_update,
-			.preview = alevel_preview,
-			.revert = alevel_revert,
-		};
-		static char buf[10];
-		static const struct configtree_t alevel = {
-			{ buf } , F_NUMERIC | F_CALLBACK, .numeric_cb = &alevel_numeric
-		};
-
 		if(it) {
-			alevel_numeric.numeric.ptr.ptr = &ui_vars.ui16_assist_level_factor[current];
-			sprintf(buf, "Level %d", current+1);
-			*it = &alevel.scrollitem;
+			// assist levels
+			const struct configtree_t *template = &((const struct configtree_t*)cfg->list)[assist_menu_items];
+			struct cfgnumeric_cb_t *num = (struct cfgnumeric_cb_t*)template->numeric_cb;
+			num->numeric.ptr.ptr = &preview_alevels[current];
+			num->numeric.ptr.size = sizeof(preview_alevels[current]);
+			num->update = alevel_update;
+			num->preview = alevel_preview;
+			num->revert = alevel_revert;
+			sprintf((char*)template->scrollitem.text, "Level %d", current+1);
+			*it = &template->scrollitem;
 		}
 		return true;
 	}
@@ -526,6 +583,7 @@ bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const
 extern const struct scroller_config cfg_levels_extend, cfg_levels_truncate;
 static int tmp_assist_levels;
 
+// warning: we totally ignore walk assist levels here, sorry
 bool do_change_assist_levels(const struct configtree_t *ign, int newv)
 {
 	int oldv = ui_vars.ui8_number_of_assist_levels;
@@ -539,8 +597,9 @@ bool do_change_assist_levels(const struct configtree_t *ign, int newv)
 
 	} else  if(oldv == 1) { // same here, just duplicate the first level
 		for(int i=1;i<newv;i++)
-			preview_alevels[i] = ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[0];
+			ui_vars.ui16_assist_level_factor[i] = ui_vars.ui16_assist_level_factor[0];
 		ui_vars.ui8_number_of_assist_levels = newv;
+		copy_alevels_to_preview();
 		return true;
 
 	} else if(newv > ui_vars.ui8_number_of_assist_levels)
@@ -563,28 +622,29 @@ void do_resize_assist_levels(const struct configtree_t *ign)
 	}
 	ui_vars.ui8_number_of_assist_levels = newv;
 
-	memcpy(preview_alevels, ui_vars.ui16_assist_level_factor, sizeof(preview_alevels));
+	copy_alevels_to_preview();
 	sstack_pop(); // extend/interpolate menu
 	sstack_pop(); // assist level spinner
 }
 
 void do_interpolate_assist_levels(const struct configtree_t *ign)
 {
-	// use preview_alevels as temporary
 	int oldv = ui_vars.ui8_number_of_assist_levels;
 	int newv = tmp_assist_levels;
-	preview_alevels[0] = ui_vars.ui16_assist_level_factor[0];
+	uint16_t tmp[ASSIST_LEVEL_NUMBER];
+	tmp[0] = ui_vars.ui16_assist_level_factor[0];
 
 	for(int i=1;i < newv-1;i++) {
 		int j = i * 256 * (oldv-1) / (newv-1);
 		int a = ui_vars.ui16_assist_level_factor[j>>8];
 		int b = ui_vars.ui16_assist_level_factor[(j>>8)+1];
 		int frac = j&255;
-		preview_alevels[i] = (a * (256-frac) + b * frac) >> 8;
+		tmp[i] = (a * (256-frac) + b * frac) >> 8;
 	}
 
-	preview_alevels[newv-1] = ui_vars.ui16_assist_level_factor[oldv-1];
-	memcpy(ui_vars.ui16_assist_level_factor, preview_alevels, sizeof(preview_alevels));
+	tmp[newv-1] = ui_vars.ui16_assist_level_factor[oldv-1];
+	memcpy(ui_vars.ui16_assist_level_factor, tmp, sizeof(tmp));
+	copy_alevels_to_preview();
 
 	ui_vars.ui8_number_of_assist_levels = newv;
 	sstack_pop(); // extend/interpolate menu
