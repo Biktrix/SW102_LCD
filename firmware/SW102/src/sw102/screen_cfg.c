@@ -143,14 +143,20 @@ static int get_editable_numeric_value(struct ss_cfg_edit *owner, int index)
 	if(index == 0)
 		return num->max;
 
-	int max_aligned = num->max - ((num->max - num->min) % owner->step) + owner->step;
+	int k = (num->max - num->min) % owner->step;
+	if(k)
+		k = owner->step - k;
+	int max_aligned = num->max + k;
 	return max_aligned - owner->step * index;
 }
 
 static int get_editable_numeric_index(struct ss_cfg_edit *owner, int value)
 {
 	const struct cfgnumeric_t *num = owner->item->numeric;
-	int max_aligned = num->max - ((num->max - num->min) % owner->step) + owner->step;
+	int k = (num->max - num->min) % owner->step;
+	if(k)
+		k = owner->step - k;
+	int max_aligned = num->max + k;
 
 	if(value == num->max)
 		return 0;
@@ -430,12 +436,14 @@ static void cfg_assist_idle(void *_it)
 {
 	struct ss_cfg_list *scr = _it;
 	cfg_list_idle(_it);
+		
+	int assist_menu_items = ((const struct assist_scroller_config*)scr->cfg)->n_menuitems;
 	
 	int current = -1;
 	if(scr->cfg == &cfg_assist.scroller) // compute this only for the toplevel assist menu
-		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - cfg_assist.n_menuitems);
+		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - assist_menu_items);
 	else if(scr->cfg == &cfg_walk_assist.scroller) // or this one
-		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - cfg_assist.n_menuitems);
+		current = ui_vars.ui8_number_of_assist_levels - 1 - (scr->sst.cidx - assist_menu_items);
 
 	assist_draw_levels(current);
 }
@@ -544,6 +552,7 @@ bool rescale_update(const struct configtree_t *it, int value)
 {
 	rescale_preview(it, value);
 	copy_preview_to_alevels();
+	return true;
 }
 
 void rescale_revert(const struct configtree_t *it)
