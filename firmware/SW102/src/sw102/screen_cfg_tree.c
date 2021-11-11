@@ -11,6 +11,7 @@ static void do_reset_ble(const struct configtree_t *ign);
 static void do_reset_all(const struct configtree_t *ign);
 void cfg_push_assist_screen(const struct configtree_t *ign);
 void cfg_push_walk_assist_screen(const struct configtree_t *ign);
+void cfg_push_calibration_screen(const struct configtree_t *ign);
 
 static bool do_set_wh(const struct configtree_t *ign, int wh);
 static bool do_set_odometer(const struct configtree_t *ign, int wh);
@@ -61,7 +62,12 @@ static const struct configtree_t cfgroot[] = {
 		{ "Coast brake ADC", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_coast_brake_adc), 0, "", 5, 255 }},
 		{ "Sensor filter", F_NUMERIC, .numeric = &(const struct cfgnumeric_t){ PTRSIZE(ui_vars.ui8_torque_sensor_filter), 0, "", 0, 100 }},
 		{ "Start pedal ground", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_torque_sensor_calibration_pedal_ground), left_right }},
-		{ "Calibration", 0 },
+		{ "Calibration", F_SUBMENU, .submenu = &(const struct scroller_config) { 20, 58, 36, 0, 128, (const struct configtree_t[]) {
+			{ "Use calibration", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_torque_sensor_calibration_feature_enabled), disable_enable }},
+			{ "Left side", F_BUTTON, .action = cfg_push_calibration_screen },
+			{ "Right side", F_BUTTON, .action = cfg_push_calibration_screen },
+			{},
+		}}},
 		{},
 	}}},
 	{ "Assist", F_BUTTON, .action = cfg_push_assist_screen },
@@ -149,6 +155,13 @@ const struct assist_scroller_config cfg_walk_assist = { { 20, 26, 36, 0, 76, (co
 	// this is a template
 	{ (char[10]){}, F_NUMERIC | F_CALLBACK, .numeric_cb = &(struct cfgnumeric_cb_t) { { { 0, 0 }, 0, "%", 1, 100 } }}
 }, enumerate_assist_levels }, 1};
+
+bool enumerate_calibration(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
+const struct scroller_config cfg_calibration = { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
+	// these are templates
+	{ (char[10]){}, F_NUMERIC | F_CALLBACK, .numeric_cb = &(struct cfgnumeric_cb_t) { { { 0, 0 }, 0, "kg", 0, 200 }}},
+	{ (char[10]){}, F_NUMERIC | F_CALLBACK, .numeric_cb = &(struct cfgnumeric_cb_t) { { { 0, 0 }, 0, "", 0, 1023 }}},
+}, enumerate_calibration };
 
 static void do_reset_trip_a(const struct configtree_t *ign)
 {

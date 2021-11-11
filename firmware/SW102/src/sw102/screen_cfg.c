@@ -662,6 +662,171 @@ void do_interpolate_assist_levels(const struct configtree_t *ign)
 	sstack_pop(); // assist level spinner
 }
 
+// torque sensor calibration  ======================================================================
+
+#define CALIB_LEVEL_NUMBER (8)
+
+typedef unsigned short calibdata_t[2];
+
+static unsigned short *calibration_preview_ptr;
+static unsigned short calibration_preview_value;
+static calibdata_t *current_cdata;
+
+static void calibration_draw_chart()
+{
+	const int y0 = 76;
+	// clear some overflown parts of the scroller
+	fill_rect(0, y0, 64, 20, false);
+	
+	calibdata_t *cdata = current_cdata;
+	int xmax = cdata[7][0];
+	int ymax = cdata[7][1];
+
+	unsigned short save = 0;
+	if(calibration_preview_ptr) {
+		save = *calibration_preview_ptr;
+		*calibration_preview_ptr = calibration_preview_value;
+
+		if(tick & 8) {
+			for(int i=0;i<CALIB_LEVEL_NUMBER;i++) {
+				if(&cdata[i][0] == calibration_preview_ptr) {
+					int x = cdata[i][0] * 63 / xmax;
+					draw_vline(x, y0, 128);
+				}
+				if(&cdata[i][1] == calibration_preview_ptr) {
+					int y = 127 - (128-y0) * cdata[i][1] / ymax;
+					draw_hline(0, 64, y);
+				}
+			}
+		}
+	}
+
+	int idx=0;
+	for(int x=0;x<64;x++) {
+		int wgt = x * xmax / 63;
+		for(;idx < CALIB_LEVEL_NUMBER-1;idx++)
+			if(wgt < cdata[idx+1][0])
+				break;
+
+		int xdelta = cdata[idx+1][0] - cdata[idx][0];
+		int ydelta = cdata[idx+1][1] - cdata[idx][1];
+		if(xdelta <= 0) // invalid data
+			continue;
+
+		int v = (wgt - cdata[idx][0]) * ydelta / xdelta + cdata[idx][1];
+
+		int y = 127 - (128-y0) * v / ymax;
+		if(y >= y0 && y < 128)
+			lcd_pset(x, y, true);
+	}
+
+	if(calibration_preview_ptr) {
+		*calibration_preview_ptr = save;
+	}
+}
+
+extern const struct scroller_config cfg_calibration;
+
+static void cfg_calib_idle(void *_it)
+{
+	struct ss_cfg_list *scr = _it;
+	cfg_list_idle(_it);
+
+	calibration_draw_chart();
+}
+
+static void cfg_calib_edit_idle(void *_it)
+{
+	cfg_edit_idle(_it);
+	calibration_draw_chart();
+}
+
+static const struct stack_class cfg_calib_edit_class = {
+	sizeof(struct ss_cfg_edit),
+	.idle = cfg_calib_edit_idle,
+	.button = cfg_edit_button,
+};
+
+static void cfg_calib_button(void *_it, int but, int increment)
+{
+	struct ss_cfg_list *scr = _it;
+	if(but & M_CLICK) {
+		const struct configtree_t * it = scroller_configtree_get(&scr->sst, scr->cfg);
+		cfg_edit_push_class(it, scr->cfg, &cfg_calib_edit_class);
+
+		// trigger the preview callback immediately, so that the chart display starts showing the right item
+		if(it->numeric_cb->preview)
+			it->numeric_cb->preview(it, ptr_get(&it->numeric->ptr));
+
+		return;
+	}
+
+	cfg_list_button(_it, but, increment);
+}
+
+static const struct stack_class cfg_calib_class = {
+	sizeof(struct ss_cfg_list),
+	.idle = cfg_calib_idle,
+	.button = cfg_calib_button,
+};
+
+static bool clevel_update(const struct configtree_t *it, int value)
+{
+	ptr_set(&it->numeric->ptr, value);
+	return true;
+}
+
+static void clevel_preview(const struct configtree_t *it, int value)
+{
+	calibration_preview_ptr = it->numeric->ptr.ptr;
+	calibration_preview_value = value;
+}
+
+static void clevel_revert(const struct configtree_t *it)
+{
+	calibration_preview_ptr = 0;
+}
+
+bool enumerate_calibration(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
+{
+	int current = index;
+	// ui_vars.ui16_torque_sensor_calibration_table_right
+	if(current < 0 || current >= CALIB_LEVEL_NUMBER*2)
+		return false;
+
+	if(it) {
+		// assist levels
+		const struct configtree_t *template = &((const struct configtree_t*)cfg->list)[index&1];
+		struct cfgnumeric_cb_t *num = (struct cfgnumeric_cb_t*)template->numeric_cb;
+		num->update = clevel_update;
+		num->preview = clevel_preview;
+		num->revert = clevel_revert;
+		if(!(current&1)) {
+			sprintf((char*)template->scrollitem.text, "Weight %d", current/2);
+		} else {
+			sprintf((char*)template->scrollitem.text, "ADC val %d", current/2);
+		}
+		num->numeric.ptr.ptr = &current_cdata[current/2][current&1];
+		num->numeric.ptr.size = 2;
+		*it = &template->scrollitem;
+	}
+	return true;
+
+}
+
+void cfg_push_calibration_screen(const struct configtree_t *it)
+{
+	if(it->scrollitem.text[0] == 'L') {
+		current_cdata = ui_vars.ui16_torque_sensor_calibration_table_left;
+		cfg_list_push_class(&cfg_calibration, &cfg_calib_class);
+		// left
+	}  else {
+		current_cdata = ui_vars.ui16_torque_sensor_calibration_table_right;
+		cfg_list_push_class(&cfg_calibration, &cfg_calib_class);
+		// right
+	}
+}
+
 // store the configuration on exit ======================================================================
 
 static void cfg_leave()

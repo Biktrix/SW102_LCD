@@ -129,6 +129,11 @@ void draw_hline(int x0, int x1, int y)
 	}
 }
 
+void draw_vline(int x0, int y0, int y1)
+{
+	fill_rect(x0, y0, 1, y1-y0, true);
+}
+
 int font_getchar(const struct font *fnt, char c, int *cx)
 {
 	int i0=0;

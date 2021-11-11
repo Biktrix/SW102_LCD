@@ -42,6 +42,7 @@ inline static void img_draw(const struct image *src, int x0, int y0) {
 	img_draw_clip(src, x0, y0, 0, 0, src->w, src->h, 0);
 }
 void draw_hline(int x0, int x1, int y);
+void draw_vline(int x0, int y0, int y1);
 
 void fill_rect(int x0, int y0, int w, int h, bool v);
 inline static void clear_all() { fill_rect(0,0,64,128, false); }
