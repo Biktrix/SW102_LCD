@@ -339,12 +339,14 @@ static void cfg_button_repeat(bool speedup)
 
 // assist screen ======================================================================
 // original firmware uses defines assist level as a factor:
-// 	output current = assist level * pedal power (or equivalent pedal power in torque mode)
+// 	output current = ADC_scale * assist level * pedal power (or equivalent pedal power in torque mode)
+// ADC_scale is 0.15625A, apparently this is the unit returned by the ADC
+//
 // we want:
 // 	output power = assist_level_new * pedal power
 // 	output current = assist_level_new * pedal power / output_voltage
 // this gives:
-// 	assist_level_new = assist_level * output_voltage
+// 	assist_level_new = ADC_scale * assist_level * output_voltage
 //
 // assist_level_new can be simply understood as a power factor
 //
@@ -368,7 +370,7 @@ static void copy_alevels_to_preview()
 	} else {
 		int voltage = ui_vars.ui8_motor_type ? 36 : 48;
 		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
-			preview_alevels[i] = (ui_vars.ui16_assist_level_factor[i] * voltage + 5/* rounding*/) / 10;
+			preview_alevels[i] = ((unsigned int)ui_vars.ui16_assist_level_factor[i] * voltage + 32/* rounding*/) / 64;
 	}
 }
 
@@ -380,7 +382,7 @@ static void copy_preview_to_alevels()
 	} else {
 		int voltage = ui_vars.ui8_motor_type ? 36 : 48;
 		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
-			ui_vars.ui16_assist_level_factor[i] = preview_alevels[i] * 10 / voltage;
+			ui_vars.ui16_assist_level_factor[i] = preview_alevels[i] * 64 / voltage;
 	}
 }
 
