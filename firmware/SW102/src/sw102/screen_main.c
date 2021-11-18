@@ -202,6 +202,33 @@ static void draw_assist_indicator(ui_vars_t *ui)
 		fill_rect(0, bar_bottom - bar_height * i - bar_fill, 2, bar_fill, true);
 }
 
+static bool draw_fault_states(ui_vars_t *ui)
+{
+	extern const struct font font_full;
+	const char *e1="FAULT:", *e2 = "";
+
+	if(ui->ui8_error_states & 2)
+		e1="initializing", e2 = "motor";
+	else if(ui->ui8_error_states & 4)
+		e1 = "motor",e2="blocked";
+	else if(ui->ui8_error_states & 8)
+		e2 = "torque";
+	else if(ui->ui8_error_states & 16)
+		e2 = "brake";
+	else if(ui->ui8_error_states & 32)
+		e2 = "throttle";
+	else if(ui->ui8_error_states & 64)
+		e2 = "speed sns";
+	else if(ui->ui8_error_states & 128)
+		e2 = "comm";
+	else
+		return false;
+
+	font_text(&font_full, 32, 80, e1, AlignCenter);
+	font_text(&font_full, 32, 96, e2, AlignCenter);
+	return true;
+}
+
 static void main_idle()
 {
 	char *ptr;
@@ -238,12 +265,13 @@ static void main_idle()
 		draw_main_speed(ui, 44);
 	}
 
-	struct GraphData *gd = mode_graph[display_mode];
-	if(!gd) 
-		gd = &graph_speed;
+	if(!draw_fault_states(ui)) {
+		struct GraphData *gd = mode_graph[display_mode];
+		if(!gd) 
+			gd = &graph_speed;
 
-	graph_paint(gd, 3, 114, 58, 50, 114-72);
-
+		graph_paint(gd, 3, 114, 58, 50, 114-72);
+	}
 	lcd_refresh();
 }
 
