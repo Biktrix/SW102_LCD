@@ -330,10 +330,11 @@ void rt_send_tx_package(frame_type_t type) {
 			(uint8_t) (ui16_crc_tx & 0xff);
 	ui8_usart1_tx_buffer[crc_len + 1] =
 			(uint8_t) (ui16_crc_tx >> 8) & 0xff;
+	ui8_usart1_tx_buffer[crc_len + 2] = 0; // workaround for UART parsing bug in motor firmware 1.1.1
 
 	// send the full package to UART
 	if (g_motor_init_state != MOTOR_INIT_SIMULATING) // If we are simulating received packets never send real packets
-		uart_send_tx_buffer(ui8_usart1_tx_buffer, ui8_usart1_tx_buffer[1] + 2);
+		uart_send_tx_buffer(ui8_usart1_tx_buffer, ui8_usart1_tx_buffer[1] + 3);
 }
 
 void rt_low_pass_filter_battery_voltage_current_power(void) {
