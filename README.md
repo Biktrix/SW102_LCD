@@ -21,9 +21,11 @@ Known issues:
 
 ## Installation
 
-At the moment you need to build from source, see [here](firmware/SW102/README.md) for instructions. 
+If you have already installed casainho's SW102 software & bootloader, you can switch to this version and back via bluetooth. See the [wiki page](https://github.com/OpenSourceEBike/TSDZ2_wiki/wiki/Flash-the-firmware-on-SW102) for flashing instructions. OTA update binaries are available on the [releases page](releases/). 
 
-If you have already installed casainho's SW102 software & bootloader, you can switch to this version and back via bluetooth. See the [wiki page](https://github.com/OpenSourceEBike/TSDZ2_wiki/wiki/Flash-the-firmware-on-SW102) for flashing instructions.
+If you have the factory SW102 software installed, you will need to disassemble the device [as described here](https://github.com/OpenSourceEBike/TSDZ2_wiki/wiki/Flash-the-bootloader-and-firmware-on-SW102-using-SWD), and flash the bootloader. Afterwards you can switch to this version using the procedure described above.
+
+To build from source, see [here](firmware/SW102/README.md) for instructions. 
 
 ## Usage
 
