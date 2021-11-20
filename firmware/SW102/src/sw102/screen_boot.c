@@ -17,7 +17,7 @@ static void boot_idle()
 {
 	switch (g_motor_init_state) {
 		case MOTOR_INIT_SIMULATING:
-			if(tick < 50)
+			if(tick < 100)
 				break;
 
 		case MOTOR_INIT_WAIT_GOT_CONFIGURATIONS_OK:

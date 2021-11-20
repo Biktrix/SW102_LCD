@@ -87,7 +87,13 @@ static uint16_t fakeWave(uint32_t *storage, uint16_t minv, uint16_t maxv) {
 
 /// Generate a fake value that randomly oscillates between min and max and then back to min.  You must provide static storage for this routine to use
 static uint16_t fakeRandom(uint32_t *storage, uint16_t minv, uint16_t maxv) {
-    int32_t rnd = (rand() - RAND_MAX / 2) % ((maxv - minv) / 20);
+    int32_t rnd = (rand() - RAND_MAX / 2) % ((maxv - minv) / 5);
+    if(*storage == 0)
+	    *storage = (minv+maxv)/2;
+    if(*storage == minv && rnd < 0)
+	    rnd=-rnd;
+    if(*storage == maxv && rnd > 0)
+	    rnd=-rnd;
     (*storage) += rnd;
     if (*storage > maxv) {
         *storage = (uint32_t)maxv;
@@ -106,13 +112,13 @@ void parse_simmotor() {
 
   // execute at a slow rate so values can be seen on the graph
   counter++;
-  if (counter % (3 * 10)) // 3 seconds
+  if (counter % (1 * 10)) // 1 seconds
     return;
 
 	const uint32_t min_bat10x = 400;
 	const uint32_t max_bat10x = 546;
 	const uint32_t max_cur10x = 140;
-  static uint32_t voltstore, curstore, speedstore, cadencestore, tempstore, diststore;
+  static uint32_t voltstore, curstore, speedstore, cadencestore, tempstore, diststore, pedalstore;
 
 	// per step of ADC ADC_BATTERY_VOLTAGE_PER_ADC_STEP_X10000
 	// l2_vars.ui16_adc_battery_voltage = battery_voltage_10x_get() * 1000L / ADC_BATTERY_VOLTAGE_PER_ADC_STEP_X10000;
@@ -128,7 +134,6 @@ void parse_simmotor() {
 
 	rt_vars.ui16_wheel_speed_x10 = fakeRandom(&speedstore, 80, 300);
     diststore += rt_vars.ui16_wheel_speed_x10 * 2.6; // speed x 10 to millimeters per 100 ms
-rt_vars.ui16_wheel_speed_x10 = 842; // for testing, just leave speed fixed
 
 	rt_vars.ui8_braking = 0; // fake(0, 1);
 
@@ -139,6 +144,8 @@ rt_vars.ui16_wheel_speed_x10 = 842; // for testing, just leave speed fixed
 	} else {
 		rt_vars.ui8_throttle = fake(0, 100);
 	}
+
+	rt_vars.ui16_pedal_power_x10 = fakeRandom(&pedalstore, 0, 1000);
 
 	rt_vars.ui16_adc_pedal_torque_sensor = fake(0, 1023);
 
