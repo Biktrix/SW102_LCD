@@ -87,6 +87,10 @@ extern "C" void lcd_refresh(void)
 			*optr++ = (framebuffer.u32[x*(128/32)+(y/32)] >> (y&31)) & 1 ? 255 : 0;
 		}
 	}
+	char buf[100];
+	static int frame;
+	sprintf(buf, "out/%04d.pgm", frame++);
+	oled->display.save(buf);
 	oled->repaint();
 }
 
