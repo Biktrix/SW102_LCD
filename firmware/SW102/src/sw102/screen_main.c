@@ -36,7 +36,7 @@ DEFINE_FONT(2nd, " ./0123456789Whkm", 2, 3, 7, 16, 23, 31, 40, 49, 58, 67, 76, 8
 
 const
 #include "font_battery.xbm"
-DEFINE_FONT(battery, "%0123456789", 5, 10, 15, 20, 25, 30, 35, 40, 45, 50);
+DEFINE_FONT(battery, "%.0123456789V", 5, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57);
 
 #define GRAPH_DEPTH 64
 struct GraphData {
@@ -159,7 +159,16 @@ static void draw_battery_indicator(ui_vars_t *ui)
 
 	img_draw_clip(&img_icon_battery, 0, 1, 0, 0, batpx+3, img_icon_battery.h, 0);
 
-	sprintf(buf, "%d%%", ui8_g_battery_soc);
+	switch (ui_vars.ui8_battery_soc_enable) {
+	case 0:
+		break;
+	case 1:
+		sprintf(buf, "%d%%", ui8_g_battery_soc);
+		break;
+	case 2:
+		sprintf(buf, "%d.%dV", ui->ui16_battery_voltage_soc_x10/10,  ui->ui16_battery_voltage_soc_x10 % 10);
+		break;
+	}
 	font_text(&font_battery, 62, 3, buf, AlignRight);
 }
 
