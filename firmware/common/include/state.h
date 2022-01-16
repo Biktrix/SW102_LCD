@@ -454,3 +454,4 @@ extern volatile motor_init_status_t ui8_g_motor_init_status;
 #define PEDAL_POWER_FILTER_COEFFICIENT     3
 #define PEDAL_CADENCE_FILTER_COEFFICIENT   3
 
+void batteryResistance(void);
