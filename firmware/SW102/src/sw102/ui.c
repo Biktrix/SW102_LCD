@@ -24,7 +24,9 @@ int tick;
 void ui_update()
 {
 	buttons_events_t ev = buttons_get_events();
-	automatic_power_off_management();
+
+	if((tick%5)==0) // this needs to be called every 100ms
+		automatic_power_off_management();
 
 	if(ev & ONOFF_LONG_CLICK)
 		lcd_power_off(0);
