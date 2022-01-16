@@ -25,9 +25,6 @@ void ui_update()
 {
 	buttons_events_t ev = buttons_get_events();
 
-	if((tick%5)==0) // this needs to be called every 100ms
-		automatic_power_off_management();
-
 	if(ev & ONOFF_LONG_CLICK)
 		lcd_power_off(0);
 
@@ -42,8 +39,12 @@ void ui_update()
 
 	buttons_clock();
 
-	rt_processing_stop();
-	copy_rt_to_ui_vars();
-	rt_processing_start();
+	if((tick%5)==0) { // this needs to be called every 100ms
+		automatic_power_off_management();
+		rt_processing_stop();
+		copy_rt_to_ui_vars();
+		rt_processing_start();
+		batteryResistance();
+	}
 	++tick;
 }
