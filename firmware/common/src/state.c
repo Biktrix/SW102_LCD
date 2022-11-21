@@ -378,9 +378,8 @@ void rt_low_pass_filter_battery_voltage_current_power(void) {
           >> MOTOR_CURRENT_FILTER_COEFFICIENT;
 
 	// full battery power, considering the power loss also inside the battery and cables, because we are using the battery resistance
-  //
-  uint16_t ui16_battery_power_filtered_x50 = rt_vars.ui16_battery_current_filtered_x5 * rt_vars.ui16_battery_voltage_filtered_x10;
-  rt_vars.ui16_battery_power_filtered = ui16_battery_power_filtered_x50 / 50;
+  uint32_t ui32_battery_power_filtered_x50 = rt_vars.ui16_battery_current_filtered_x5 * rt_vars.ui16_battery_voltage_filtered_x10;
+  rt_vars.ui16_battery_power_filtered = ui32_battery_power_filtered_x50 / 50;
 
   // P = R * I^2
   uint32_t ui32_temp = (uint32_t) rt_vars.ui16_battery_current_filtered_x5;
