@@ -142,7 +142,10 @@ static void draw_2nd_field(ui_vars_t *ui, int y)
 
 	case ModeMotorPower:
 		m = ui->ui16_battery_power;
-		sprintf(buf, "m %dW", m);
+		if (m < 1000)
+		  sprintf(buf, "m %dW", m);
+		else
+		  sprintf(buf, "m %d.%02dkW", m/1000, (m/10) %100);
 		break;
 	default:
 		buf[0]=0;
@@ -172,6 +175,8 @@ static void draw_battery_indicator(ui_vars_t *ui)
 	font_text(&font_battery, 62, 3, buf, AlignRight);
 }
 
+/* Draws the power draw as a verticle line on the right
+ * side of the display */
 static void draw_power_indicator(ui_vars_t *ui)
 {
 	int tmp = ui->ui16_battery_power;
