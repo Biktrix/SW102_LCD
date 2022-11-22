@@ -2,19 +2,16 @@
 #include "ui.h"
 #include "lcd.h"
 #include "state.h"
+#include "logo_biktrix.xbm"
 
-const
-#include "logo.xbm"
-const
-#include "logo_anim.xbm"
-
-DEFINE_IMAGE(logo);
-DEFINE_IMAGE(logo_anim);
+DEFINE_IMAGE(logo_biktrix);
 
 extern const struct screen screen_main;
 
+/* Displays boot screen until motor communication is recieved */
 static void boot_idle()
 {
+	// Check motor state
 	switch (g_motor_init_state) {
 		case MOTOR_INIT_SIMULATING:
 			if(tick < 100)
@@ -30,20 +27,16 @@ static void boot_idle()
 			break;
 	}
 
-	if(tick&3)
-		return;
-
+	// Update the flipbook 
+	if(tick%10 != 0)return;
 	static int q=1;
-	fill_rect(0,0,64,69, false);
-	img_draw(&img_logo, 16, 17);
-	img_draw_clip(&img_logo_anim, 8, 29, 0, q*18, 18, 18, 0);
-	q=(q+3)&3;
-	img_draw_clip(&img_logo_anim, 38, 29, 0, q*18, 18, 18, 0);
+	q=(q+1)&1;
+	fill_rect(0,0,64,128, false);
+	img_draw_clip(&img_logo_biktrix, 1, 22, q*58, 0, 58, 75, 0);
 	lcd_refresh();
 }
 
-void ui_show_motor_status()
-{
+void ui_show_motor_status(){
 }
 
 const struct screen screen_boot = {
