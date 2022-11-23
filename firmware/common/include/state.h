@@ -46,7 +46,7 @@ typedef struct battery_energy_h_km_struct {
 typedef struct rt_vars_struct {
 	uint16_t ui16_adc_battery_voltage;
 	uint8_t ui8_battery_current_x5;
-  	uint16_t ui16_battery_power_loss;
+  uint16_t ui16_battery_power_loss;
 	uint8_t ui8_motor_current_x5;
 	uint8_t ui8_adc_throttle;
 	uint8_t ui8_throttle;
@@ -87,8 +87,8 @@ typedef struct rt_vars_struct {
 	uint8_t ui8_target_max_battery_power_div25;
 	uint8_t ui8_battery_max_current;
 	uint8_t ui8_motor_max_current;
-  	uint8_t ui8_motor_current_min_adc;
-  	uint8_t ui8_field_weakening;
+  uint8_t ui8_motor_current_min_adc;
+  uint8_t ui8_field_weakening;
 	uint8_t ui8_ramp_up_amps_per_second_x10;
 	uint16_t ui16_battery_low_voltage_cut_off_x10;
 	uint16_t ui16_battery_voltage_reset_wh_counter_x10;
@@ -179,7 +179,7 @@ typedef struct rt_vars_struct {
 typedef struct ui_vars_struct {
 	uint16_t ui16_adc_battery_voltage;
 	uint8_t ui8_battery_current_x5;
-  	uint16_t ui16_battery_power_loss;
+  uint16_t ui16_battery_power_loss;
 	uint8_t ui8_motor_current_x5;
 	uint8_t ui8_adc_throttle;
 	uint8_t ui8_throttle;
@@ -301,7 +301,6 @@ typedef struct ui_vars_struct {
 	uint8_t ui8_street_mode_throttle_enabled;
 	uint8_t ui8_street_mode_hotkey_enabled;
 
-  uint8_t var_speed_units;
   uint16_t var_speed_graph_auto_max_min;
   uint16_t var_speed_graph_max_x10;
   uint16_t var_speed_graph_min_x10;
