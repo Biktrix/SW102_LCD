@@ -117,7 +117,7 @@ void parse_simmotor() {
 
 	const uint32_t min_bat10x = 400;
 	const uint32_t max_bat10x = 546;
-	const uint32_t max_cur10x = 140;
+	const uint32_t max_cur10x = 500;
   static uint32_t voltstore, curstore, speedstore, cadencestore, tempstore, diststore, pedalstore;
 
 	// per step of ADC ADC_BATTERY_VOLTAGE_PER_ADC_STEP_X10000
@@ -127,15 +127,15 @@ void parse_simmotor() {
 	// l2_vars.ui16_adc_battery_voltage = max_bat10x * 1000L / ADC_BATTERY_VOLTAGE_PER_ADC_STEP_X10000;
 
 	// battery current drain x5
-	rt_vars.ui8_battery_current_x5 = fakeRandom(&curstore, 0, max_cur10x) / 2;
+	rt_vars.ui8_battery_current_x5 = fakeRandom(&curstore, 200, max_cur10x) / 2;
 
 	// motor current drain x5
-  rt_vars.ui8_motor_current_x5 = fakeRandom(&curstore, 0, max_cur10x) / 2;
+  rt_vars.ui8_motor_current_x5 = fakeRandom(&curstore, 200, max_cur10x) / 2;
 
 	rt_vars.ui16_wheel_speed_x10 = fakeRandom(&speedstore, 80, 300);
     diststore += rt_vars.ui16_wheel_speed_x10 * 2.6; // speed x 10 to millimeters per 100 ms
 
-	rt_vars.ui8_braking = 0; // fake(0, 1);
+	rt_vars.ui8_braking = fake(0, 1);
 
 	rt_vars.ui8_adc_throttle = fake(0, 100);
 
@@ -390,7 +390,7 @@ void rt_low_pass_filter_battery_voltage_current_power(void) {
   ui32_temp /= 20; // now is _x50
   rt_vars.ui16_battery_power_loss = (uint16_t) (ui32_temp / 50);
 
-  rt_vars.ui16_full_battery_power_filtered_x50 = ui16_battery_power_filtered_x50 + (uint16_t) ui32_temp;
+  rt_vars.ui32_full_battery_power_filtered_x50 = ui32_battery_power_filtered_x50 + ui32_temp;
 }
 
 void rt_low_pass_filter_pedal_power(void) {
@@ -425,8 +425,8 @@ void rt_calc_wh(void) {
 	uint32_t ui32_temp = 0;
 
 	if (m_reset_wh_flag == false) {
-    if (rt_vars.ui16_full_battery_power_filtered_x50 > 0) {
-      rt_vars.ui32_wh_sum_x5 += rt_vars.ui16_full_battery_power_filtered_x50 / 10;
+    if (rt_vars.ui32_full_battery_power_filtered_x50 > 0) {
+      rt_vars.ui32_wh_sum_x5 += rt_vars.ui32_full_battery_power_filtered_x50 / 10;
       rt_vars.ui32_wh_sum_counter++;
     }
 
@@ -486,7 +486,7 @@ static void rt_calc_odometer(void) {
 #define BATTERY_ENERGY_H_KM_FACTOR_X2 1800 // (60 * 60) / 2, each step at fixed interval of 100ms and apply 1 / 2 for have value from _x50 to _x100
 
 	// keep accumulating the energy
-  rt_vars.battery_energy_h_km.ui32_sum_x50 += rt_vars.ui16_full_battery_power_filtered_x50;
+  rt_vars.battery_energy_h_km.ui32_sum_x50 += rt_vars.ui32_full_battery_power_filtered_x50;
 
   static uint16_t ui16_one_km_timeout_counter = 0;
 
@@ -717,8 +717,8 @@ void copy_rt_to_ui_vars(void) {
 			rt_vars.ui16_battery_current_filtered_x5;
   ui_vars.ui16_motor_current_filtered_x5 =
       rt_vars.ui16_motor_current_filtered_x5;
-	ui_vars.ui16_full_battery_power_filtered_x50 =
-			rt_vars.ui16_full_battery_power_filtered_x50;
+	ui_vars.ui32_full_battery_power_filtered_x50 =
+			rt_vars.ui32_full_battery_power_filtered_x50;
 	ui_vars.ui16_battery_power = rt_vars.ui16_battery_power_filtered;
 	ui_vars.ui16_pedal_power = rt_vars.ui16_pedal_power_filtered;
 	ui_vars.ui16_battery_voltage_soc_x10 = rt_vars.ui16_battery_voltage_soc_x10;
