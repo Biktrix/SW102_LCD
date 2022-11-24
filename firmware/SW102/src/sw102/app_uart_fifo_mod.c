@@ -150,26 +150,24 @@ static void on_uart_close(void)
  *
  * @param[in]  event    Event that has occurred.
  */
-static void on_uart_event(app_uart_state_events_t event)
-{
-  switch (event)
-  {
-    case ON_TX_READY:
-      on_tx_ready();
-      break;
+static void on_uart_event(app_uart_state_events_t event){
+	switch (event){
+		case ON_TX_READY:
+			on_tx_ready();
+			break;
 
-    case ON_UART_PUT:
-      on_uart_put();
-      break;
+		case ON_UART_PUT:
+			on_uart_put();
+			break;
 
-    case ON_UART_CLOSE:
-      on_uart_close();
-      break;
+		case ON_UART_CLOSE:
+			on_uart_close();
+			break;
 
-    default:
-      // All valid events are handled above.
-      break;
-  }
+		default:
+			// All valid events are handled above.
+			break;
+	}
 }
 
 /**@brief Function for the UART Interrupt handler.
