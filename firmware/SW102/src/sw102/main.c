@@ -139,9 +139,7 @@ uint32_t stack_overflow_debug(void)
     {
         uint32_t new_val = *(value_addr + offset);
         if (new_val != 0xDEADBEEF )
-        {
             break;
-        }
     }
     // stack_usage = ((uint32_t)&__StackTop - (uint32_t)&__StackLimit) - offset;
 
@@ -333,15 +331,13 @@ static void init_app_timers(void)
   APP_ERROR_CHECK(app_timer_start(gui_timer_id, GUI_INTERVAL, NULL));
 }
 
-void rt_graph_process()
-{
-}
-void ui_motor_stabilized()
-{
+void rt_graph_process(){
 }
 
-void set_conversions()
-{
+void ui_motor_stabilized(){
+}
+
+void set_conversions(){
 }
 
 uint8_t g_showNextScreenIndex, g_showNextScreenPreviousIndex;
