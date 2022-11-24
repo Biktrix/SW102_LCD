@@ -1,44 +1,39 @@
+#include <stdio.h>
+
 #include "gfx.h"
 #include "ui.h"
 #include "lcd.h"
 #include "buttons.h"
-#include <stdio.h>
-
 #include "state.h"
 
-const
+// Import Assests
+
 #include "icon_brake.xbm"
-DEFINE_IMAGE(icon_brake);
-const
 #include "icon_battery_frame.xbm"
-DEFINE_IMAGE(icon_battery_frame);
-const
 #include "icon_battery.xbm"
-DEFINE_IMAGE(icon_battery);
-const
 #include "icon_radio.xbm"
-DEFINE_IMAGE(icon_radio);
-const
 #include "icon_walk.xbm"
-DEFINE_IMAGE(icon_walk);
-const
 #include "icon_light.xbm"
+
+DEFINE_IMAGE(icon_brake);
+DEFINE_IMAGE(icon_battery_frame);
+DEFINE_IMAGE(icon_battery);
+DEFINE_IMAGE(icon_radio);
+DEFINE_IMAGE(icon_walk);
 DEFINE_IMAGE(icon_light);
 
-// fonts based on DejaVu Sans, some hand-modified
-const
+// Import fonts based on DejaVu Sans, some hand-modified
+
 #include "font_speed.xbm"
-DEFINE_FONT(speed, ".0123456789", 2, 19, 35, 51, 66, 83, 99, 116, 133, 151);
-
-const
 #include "font_2nd.xbm"
-DEFINE_FONT(2nd, " ./0123456789Whkm", 2, 3, 7, 16, 23, 31, 40, 49, 58, 67, 76, 85, 94, 103, 111, 118);
-
-const
 #include "font_battery.xbm"
+
+DEFINE_FONT(speed, ".0123456789", 2, 19, 35, 51, 66, 83, 99, 116, 133, 151);
+DEFINE_FONT(2nd, " ./0123456789Whkmi", 2, 3, 7, 16, 23, 31, 40, 49, 58, 67, 76, 85, 94, 103, 111, 118, 128);
 DEFINE_FONT(battery, "%.0123456789V", 5, 7, 12, 17, 22, 27, 32, 37, 42, 47, 52, 57);
 
 #define GRAPH_DEPTH 64
+
 struct GraphData {
 	uint8_t data[GRAPH_DEPTH];
 };
@@ -54,6 +49,7 @@ static void graph_append(struct GraphData *gd, int v)
 		v=0;
 	if(v>255)
 		v=255;
+		
 	gd->data[graph_head] = v;
 }
 
@@ -94,66 +90,100 @@ static void draw_main_speed(ui_vars_t *ui, int y)
 {
 	char buf[20];
 	int speed_x10 = ui->ui16_wheel_speed_x10;
-	sprintf(buf, "%d.%01d", speed_x10/10, speed_x10 % 10);
+
+	switch (ui_vars.ui8_unit_type){
+		case 0: sprintf(buf, "%d.%01d", speed_x10/16, ((speed_x10 % 16) * 10) /16); break; // Imperial
+		case 1: sprintf(buf, "%d.%01d", speed_x10/10, speed_x10 % 10); break; // Metric
+	}
+	
 	font_text(&font_speed, 32, y, buf, AlignCenter);
 }
 
+// Draws secondairy screen stat
 static void draw_2nd_field(ui_vars_t *ui, int y)
 {
 	char buf[20];
 	unsigned m;
 
 	switch(display_mode) {
-	case ModeOdometer:
-		sprintf(buf, "%d km", ui_vars.ui32_odometer_x10/10);
-		break;
+		case ModeOdometer:
+			switch (ui_vars.ui8_unit_type){
+				case 0: sprintf(buf, "%d miki", ui_vars.ui32_odometer_x10/16); break; // Imperial
+				case 1: sprintf(buf, "%d km", ui_vars.ui32_odometer_x10/10); break; // Metric
+			}
+			
+			break;
 
-	case ModeTripDistance:
-		m = ui->ui32_trip_a_distance_x1000;
-		if(m < 1000) // <0m-999m
-			sprintf(buf, "%d m", m);
-		else if(m < 10000) // <1.000km-9.999km
-			sprintf(buf, "%d.%03d km", m/1000, m % 1000);
-		else if(m < 100000) // 10.00km-99.99km
-			sprintf(buf, "%d.%02d km", m/1000, (m/10) % 100);
-		else if(m < 100000) // 100.0km-999.9km
-			sprintf(buf, "%d.%01d km", m/1000, (m/100) % 10);
-		else // 1000km+
-			sprintf(buf, "%d km", m/1000);
-		break;
+		case ModeTripDistance:
+			m = ui->ui32_trip_a_distance_x1000;
+			switch (ui_vars.ui8_unit_type){
+				case 0: // Imperial
+					if(m < 1000) // <0m-999m
+						sprintf(buf, "%d m", m);
+					else if(m < 10000) // <0.625mi-9.999mi
+						sprintf(buf, "%d.%03d mi", m/1600, (((m % 1600) * 10) / 16));
+					else if(m < 100000) // 10.00mi-99.99mi
+						sprintf(buf, "%d.%02d mi", m/1600, ((((m/10) % 160) * 10) / 16));
+					else if(m < 100000) // 100.0mi-999.9mi
+						sprintf(buf, "%d.%01d mi", m/1600, ((((m/100) % 16) * 10) / 16));
+					else // 1000mi+
+						sprintf(buf, "%d mi", m/1600);
+					break;
+					
+				case 1: // Metric
 
-	case ModeTripTime:
-		m = ui->ui32_trip_a_time/60;
-		if(m < 60 * 99)
-			sprintf(buf, "%dh %dm", m/60, m % 60);
-		else
-			sprintf(buf, "%d h", m/3600);
-		break;
+					if(m < 1000) // <0m-999m
+						sprintf(buf, "%d m", m);
+					else if(m < 10000) // <1.000km-9.999km
+						sprintf(buf, "%d.%03d km", m/1000, m % 1000);
+					else if(m < 100000) // 10.00km-99.99km
+						sprintf(buf, "%d.%02d km", m/1000, (m/10) % 100);
+					else if(m < 100000) // 100.0km-999.9km
+						sprintf(buf, "%d.%01d km", m/1000, (m/100) % 10);
+					else // 1000km+
+						sprintf(buf, "%d km", m/1000);
+					break;
+			}
+			break;
 
-	case ModeTripAVS:
-		m = ui->ui16_trip_a_avg_speed_x10;
-		sprintf(buf, "%d.%01d km/h", m/10, m%10);
-		break;
+		case ModeTripTime:
+			m = ui->ui32_trip_a_time/60;
+			if(m < 60 * 99)
+				sprintf(buf, "%dh %dm", m/60, m % 60);
+			else
+				sprintf(buf, "%d h", m/3600);
+			break;
 
-	case ModePedalPower:
-		m = ui->ui16_pedal_power;
-		sprintf(buf, "%d W", m);
-		break;
+		case ModeTripAVS:
+			m = ui->ui16_trip_a_avg_speed_x10;
+			switch (ui_vars.ui8_unit_type){
+				case 0: sprintf(buf, "%d.%01d km/h", m/10, m%10); break; // Imperial
+				case 1: sprintf(buf, "%d.%01d mi/h", m/16, (((m%16) * 10) / 16)); break; // Metric
+			}	
+			break;
 
-	case ModeMotorPower:
-		m = ui->ui16_battery_power;
-		if (m < 1000)
-		  sprintf(buf, "m %dW", m);
-		else
-		  sprintf(buf, "m %d.%02dkW", m/1000, (m/10) %100);
-		break;
-	default:
-		buf[0]=0;
+		case ModePedalPower:
+			m = ui->ui16_pedal_power;
+			sprintf(buf, "%d W", m);
+			break;
+
+		case ModeMotorPower:
+			m = ui->ui16_battery_power;
+			if (m < 1000) // <0-999W
+				sprintf(buf, "m %dW", m);
+			else if (m < 10000)// 999w-9.99Kw
+				sprintf(buf, "m %d.%02dkW", m/1000, (m/10) %100);
+			else
+				sprintf(buf, "m %d.%01dkW", m/10000, (m/100) % 10);
+			break;
+		default:
+			buf[0]=0;
 	}
 		
 	font_text(&font_2nd, 32, y, buf, AlignCenter);
 }
 
+// Displays battery at top of screen
 static void draw_battery_indicator(ui_vars_t *ui)
 {
 	char buf[10];
@@ -163,15 +193,12 @@ static void draw_battery_indicator(ui_vars_t *ui)
 	img_draw_clip(&img_icon_battery, 0, 1, 0, 0, batpx+3, img_icon_battery.h, 0);
 
 	switch (ui_vars.ui8_battery_soc_enable) {
-	case 0:
-		break;
-	case 1:
-		sprintf(buf, "%d%%", ui8_g_battery_soc);
-		break;
-	case 2:
-		sprintf(buf, "%d.%dV", ui->ui16_battery_voltage_soc_x10/10,  ui->ui16_battery_voltage_soc_x10 % 10);
-		break;
+		case 0: break; // None
+		case 1: sprintf(buf, "%d%%", ui8_g_battery_soc); break; // Percentage
+		case 2: sprintf(buf, "%d.%dV", ui->ui16_battery_voltage_soc_x10/10,  ui->ui16_battery_voltage_soc_x10 % 10);
+			break;// Voltage
 	}
+	
 	font_text(&font_battery, 62, 3, buf, AlignRight);
 }
 
@@ -265,10 +292,8 @@ static void main_idle()
 	}
 
 	draw_battery_indicator(ui);
-
 	draw_misc_indicators(ui);
 	draw_power_indicator(ui);
-
 	draw_assist_indicator(ui);
 
 	if(mode_graph[display_mode]) {
