@@ -13,8 +13,7 @@ buttons_events_t buttons_get_events(void)
 	return (buttons_events_t)events;
 }
 
-void buttons_clear_all_events(void)
-{
+void buttons_clear_all_events(void){
 	events = 0;
 }
 
