@@ -164,11 +164,10 @@ int font_length(const struct font *fnt, const char *txt)
 int font_text(const struct font *fnt, int x, int y, const char *txt, int flags)
 {
 	int align = flags & AlignMask;
-	if(align == AlignRight) {
-		x = x - font_length(fnt, txt);
-	} else if(align == AlignCenter) {
-		x = x - font_length(fnt, txt)/2;
-	}
+	if(align == AlignRight)
+		x -= font_length(fnt, txt);
+	else if(align == AlignCenter)
+		x -= font_length(fnt, txt)/2;
 
 	while(*txt) {
 		int cx, l;
