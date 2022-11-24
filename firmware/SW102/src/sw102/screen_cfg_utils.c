@@ -90,27 +90,24 @@ DEFINE_FONT(full,
 	5,7,11,20,26,37,46,48,52,56,62,70,72,76,78,83,90,96,103,110,117,124,131,138,145,152,154,156,165,174,183,189,201,210,217,224,232,239,245,253,261,263,267,274,280,289,297,305,312,320,328,335,343,351,360,372,380,388,396,399,404,407,414,421,424,431,438,444,451,458,463,470,477,479,482,488,490,500,507,514,521,528,533,539,544,551,558,568,575,582,588,594,596,602
 );
 
-int ptr_get(const struct cfgptr_t *it)
-{
-	if(it->size == 1) {
+int ptr_get(const struct cfgptr_t *it){
+	if(it->size == 1)
 		return *((unsigned char*)it->ptr);
-	} else if(it->size == 2) {
+	else if(it->size == 2)
 		return *((unsigned short*)it->ptr);
-	} else if(it->size == 4) {
+	else if(it->size == 4) 
 		return *((unsigned int*)it->ptr);
-	}
+
 	return 0;
 }
 
-void ptr_set(const struct cfgptr_t *it, int v)
-{
-	if(it->size == 1) {
+void ptr_set(const struct cfgptr_t *it, int v){
+	if(it->size == 1) 
 		*((unsigned char*)it->ptr) = v;
-	} else if(it->size == 2) {
+	else if(it->size == 2)
 		*((unsigned short*)it->ptr) = v;
-	} else if(it->size == 4) {
+	else if(it->size == 4)
 		*((unsigned int*)it->ptr) = v;
-	}
 }
 
 void numeric2string(const struct cfgnumeric_t *num, int v, char *out, bool include_unit)
@@ -144,15 +141,11 @@ void numeric2string(const struct cfgnumeric_t *num, int v, char *out, bool inclu
 	}
 }
 
-void scroller_reset(struct scroller_state *st)
-{
+void scroller_reset(struct scroller_state *st){
 	st->cidx = st->xscroll = st->yscroll = 0;
 }
 
-#define INVERTED_DRAW 1
-
-bool configtree_scroller_item_callback(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
-{
+bool configtree_scroller_item_callback(const struct scroller_config *cfg, int index, const struct scroller_item_t **it){
 	const struct configtree_t *list = cfg->list;
 	if(!list[index].scrollitem.text)
 		return false;
@@ -161,8 +154,7 @@ bool configtree_scroller_item_callback(const struct scroller_config *cfg, int in
 	return true;
 }
 
-void scroller_draw_list(struct scroller_state *st, const struct scroller_config *cfg)
-{
+void scroller_draw_list(struct scroller_state *st, const struct scroller_config *cfg){
 	scroller_item_callback *cb = cfg->cb ? cfg->cb : configtree_scroller_item_callback;
 
 	if(st->yscroll > 0)
