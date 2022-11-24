@@ -21,6 +21,11 @@ static const char *off_on[] = { "off", "on", 0 };
 static const char *left_right[] = { "left", "right", 0 };
 
 static const struct configtree_t cfgroot[] = {
+	{ "Display", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, 0, 128, (const struct configtree_t[]) {
+		{ "Units", F_OPTIONS, .options = &(const struct cfgoptions_t){ PTRSIZE(ui_vars.ui8_unit_type), (const char*[]){ "Metric", "Imperial", 0}}},
+		{ "Battery", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_battery_soc_enable), (const char*[]){ "none", "charge %", "voltage", 0 }}},
+		{},
+	}}},
 	{ "Trip memory", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 18, 0, 128, (const struct configtree_t[]) {
 		{ "Reset trip A", F_BUTTON, .action = do_reset_trip_a },
 		{ "Reset trip B", F_BUTTON, .action = do_reset_trip_b },
@@ -41,7 +46,6 @@ static const struct configtree_t cfgroot[] = {
 		{},
 	}}},
 	{ "Charge", F_SUBMENU, .submenu = &(const struct scroller_config){ 20, 58, 36, 0, 128, (const struct configtree_t[]) {
-		{ "Display", F_OPTIONS, .options = &(const struct cfgoptions_t) { PTRSIZE(ui_vars.ui8_battery_soc_enable), (const char*[]){ "none", "charge %", "voltage", 0 }}},
 		{ "Reset voltage", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui16_battery_voltage_reset_wh_counter_x10), 1, "V", 160, 630 }},
 		{ "Total capacity", F_NUMERIC, .numeric = &(const struct cfgnumeric_t) { PTRSIZE(ui_vars.ui32_wh_x10_100_percent), 1, "Wh", 0, 9990, 100 }},
 		{ "Used Wh", F_NUMERIC|F_CALLBACK,  .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui32_wh_x10), 1, "Wh", 0, 9990, 100 }, do_set_wh }},
@@ -122,15 +126,18 @@ static const struct configtree_t cfgroot[] = {
 const struct scroller_config cfg_root = { 20, 58, 18, 0, 128,  cfgroot };
 
 static int tmp_rescale = 100;
+
 bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
 bool enumerate_walk_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it);
 
 bool do_change_assist_levels(const struct configtree_t *ign, int newv);
+void do_resize_assist_levels(const struct configtree_t *ign);
+void do_interpolate_assist_levels(const struct configtree_t *ign);
+
 bool rescale_update(const struct configtree_t *it, int value);
 void rescale_preview(const struct configtree_t *it, int value);
 void rescale_revert(const struct configtree_t *it);
-void do_resize_assist_levels(const struct configtree_t *ign);
-void do_interpolate_assist_levels(const struct configtree_t *ign);
+
 
 const struct assist_scroller_config cfg_assist = { { 20, 26, 36, 0, 76, (const struct configtree_t[]) {
 	{ "Assist levels", F_NUMERIC | F_CALLBACK, .numeric_cb = &(const struct cfgnumeric_cb_t) { { PTRSIZE(ui_vars.ui8_number_of_assist_levels), 0, "", 1, 20 }, do_change_assist_levels }},
