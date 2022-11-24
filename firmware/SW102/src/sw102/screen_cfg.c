@@ -77,17 +77,14 @@ static void cfg_list_button(void *_it, int but, int increment)
 	if(but & M_CLICK) {
 		const struct configtree_t * it = scroller_configtree_get(&scr->sst, scr->cfg);
 		int type = it->flags & F_TYPEMASK;
-		if(it->flags & F_RO) {
+		if (it->flags & F_RO) {}
 			// nop
-		} else if(type == F_SUBMENU) {
+		else if (type == F_SUBMENU)
 			cfg_list_push(it->submenu);
-
-		} else if(type == F_BUTTON) {
+		else if (type == F_BUTTON)
 			it->action(it);
-
-		} else if(type == F_NUMERIC || type == F_OPTIONS) {
+		else if (type == F_NUMERIC || type == F_OPTIONS)
 			cfg_edit_push(it, scr->cfg);
-		}
 	}
 }
 
@@ -97,21 +94,18 @@ static const struct stack_class cfg_list_class = {
 	.button = cfg_list_button,
 };
 
-static void cfg_list_push_class(const struct scroller_config *it, const struct stack_class *klass)
-{
+static void cfg_list_push_class(const struct scroller_config *it, const struct stack_class *klass){
 	struct ss_cfg_list *ss_it = sstack_alloc(klass);
 	scroller_reset(&ss_it->sst);
 	ss_it->cfg = it;
 	sstack_push();
 }
 
-static void cfg_list_push(const struct scroller_config *it)
-{
+static void cfg_list_push(const struct scroller_config *it){
 	cfg_list_push_class(it, &cfg_list_class);
 }
 
-static void cfg_edit_idle(void *_it)
-{
+static void cfg_edit_idle(void *_it){
 	struct ss_cfg_edit *scr = _it;
 	cfg_button_repeat(true);
 	scroller_draw_list(&scr->sst, &scr->cfg);
@@ -188,12 +182,11 @@ static void cfg_edit_button(void *_it, int but, int increment)
 	int type = scr->item->flags & F_TYPEMASK;
 	int oldval = scr->value;
 	but = scroller_button(&scr->sst, &scr->cfg, but, increment);
-	if(type == F_NUMERIC) {
+	
+	if(type == F_NUMERIC)
 		scr->value = get_editable_numeric_value(scr, scr->sst.cidx);
-
-	} else {
+	else
 		scr->value = scr->sst.cidx;
-	}
 
 	if(scr->value != oldval && scr->item->flags & F_CALLBACK) {
 		if(scr->item->numeric_cb->preview)
@@ -211,14 +204,14 @@ static void cfg_edit_button(void *_it, int but, int increment)
 
 	if(but & M_CLICK) {
 		bool pop = true;
-		if(scr->item->flags & F_CALLBACK) {
+		if(scr->item->flags & F_CALLBACK)
 			pop = scr->item->numeric_cb->update(scr->item, scr->value);
-		} else {
+		else
 			ptr_set(scr->item->ptr, scr->value);
-		}
 
 		if(pop)
 			sstack_pop();
+			
 		return;
 	}
 }
@@ -259,27 +252,23 @@ static void cfg_edit_push_class(const struct configtree_t *it, const struct scro
 	sstack_push();
 }
 
-static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg)
-{
+static void cfg_edit_push(const struct configtree_t *it, const struct scroller_config *cfg){
 	cfg_edit_push_class(it, cfg, &cfg_edit_class);
 }
 
 extern const struct scroller_config cfg_root;
-static void cfg_enter()
-{
+static void cfg_enter(){
 	sstack_reset();
 	cfg_list_push(&cfg_root);
 }
 
-static void cfg_idle()
-{
+static void cfg_idle(){
 	clear_all();
 	sstack_idle();
 	lcd_refresh();
 }
 
-static void cfg_handle_button(int but, int increment)
-{
+static void cfg_handle_button(int but, int increment){
 	sstack_button(but, increment);
 }
 
@@ -324,8 +313,7 @@ static int repeat_button(int counter, bool speedup)
 	}
 }
 
-static void cfg_button_repeat(bool speedup)
-{
+static void cfg_button_repeat(bool speedup){
 	if(up_hold >= 0) {
 		int n = repeat_button(++up_hold, speedup);
 		if(n) cfg_handle_button(UP_PRESS, n);
@@ -368,7 +356,7 @@ static void copy_alevels_to_preview()
 		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
 			preview_alevels[i] = ui_vars.ui8_walk_assist_level_factor[i];
 	} else {
-		int voltage = ui_vars.ui8_motor_type ? 36 : 48;
+		int voltage = ui_vars.ui8_motor_type ? 36 : 48 ;
 		for(int i=0;i<ASSIST_LEVEL_NUMBER;i++)
 			preview_alevels[i] = ((unsigned int)ui_vars.ui16_assist_level_factor[i] * voltage + 32/* rounding*/) / 64;
 	}
@@ -450,8 +438,7 @@ static void cfg_assist_idle(void *_it)
 	assist_draw_levels(current);
 }
 
-static void cfg_assist_sub_idle(void *_it)
-{
+static void cfg_assist_sub_idle(void *_it){
 	cfg_list_idle(_it);
 	assist_draw_levels(-1);
 }
@@ -461,8 +448,7 @@ struct ss_cfg_edit_assist {
 	int current;
 };
 
-static void cfg_assist_edit_idle(void *_it)
-{
+static void cfg_assist_edit_idle(void *_it){
 	struct ss_cfg_edit_assist *e = _it;
 	cfg_edit_idle(_it);
 	assist_draw_levels(e->current);
@@ -474,8 +460,7 @@ static const struct stack_class cfg_assist_edit_class = {
 	.button = cfg_edit_button,
 };
 
-static void cfg_assist_button(void *_it, int but, int increment)
-{
+static void cfg_assist_button(void *_it, int but, int increment){
 	struct ss_cfg_list *scr = _it;
 	if(but & M_CLICK) {
 		// ensure that submenus receive the current assist level so that the highlight can follow it
@@ -505,27 +490,23 @@ static const struct stack_class cfg_assist_sub_class = {
 	.button = cfg_list_button,
 };
 
-void cfg_push_assist_screen(const struct configtree_t *ign)
-{
+void cfg_push_assist_screen(const struct configtree_t *ign){
 	editing_walk_assist = false;
 	copy_alevels_to_preview();
 	cfg_list_push_class(&cfg_assist.scroller, &cfg_assist_class);
 }
 
-void cfg_push_walk_assist_screen(const struct configtree_t *ign)
-{
+void cfg_push_walk_assist_screen(const struct configtree_t *ign){
 	editing_walk_assist = true;
 	copy_alevels_to_preview();
 	cfg_list_push_class(&cfg_walk_assist.scroller, &cfg_assist_class);
 }
 
-static bool alevel_update(const struct configtree_t *it, int value)
-{
+static bool alevel_update(const struct configtree_t *it, int value){
 	copy_preview_to_alevels();
 }
 
-static void alevel_preview(const struct configtree_t *it, int value)
-{
+static void alevel_preview(const struct configtree_t *it, int value){
 	int level = (unsigned int*)it->numeric->ptr.ptr - preview_alevels;
 	copy_alevels_to_preview();
 
@@ -537,33 +518,28 @@ static void alevel_preview(const struct configtree_t *it, int value)
 	}
 }
 
-static void alevel_revert(const struct configtree_t *it)
-{
+static void alevel_revert(const struct configtree_t *it){
 	copy_alevels_to_preview();
 }
 
-void rescale_preview(const struct configtree_t *it, int value)
-{
+void rescale_preview(const struct configtree_t *it, int value){
 	copy_alevels_to_preview();
 
 	for(int i=0;i < ASSIST_LEVEL_NUMBER;i++) 
 		preview_alevels[i] = preview_alevels[i] * value / 100;
 }
 
-bool rescale_update(const struct configtree_t *it, int value)
-{
+bool rescale_update(const struct configtree_t *it, int value){
 	rescale_preview(it, value);
 	copy_preview_to_alevels();
 	return true;
 }
 
-void rescale_revert(const struct configtree_t *it)
-{
+void rescale_revert(const struct configtree_t *it){
 	copy_alevels_to_preview();
 }
 
-bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it)
-{
+bool enumerate_assist_levels(const struct scroller_config *cfg, int index, const struct scroller_item_t **it){
 	int assist_menu_items = ((const struct assist_scroller_config*)cfg)->n_menuitems;
 
 	if(index < assist_menu_items) {// regular menu
@@ -622,8 +598,7 @@ bool do_change_assist_levels(const struct configtree_t *ign, int newv)
 	return false;
 }
 
-void do_resize_assist_levels(const struct configtree_t *ign)
-{
+void do_resize_assist_levels(const struct configtree_t *ign){
 	int oldv = ui_vars.ui8_number_of_assist_levels;
 	int newv = tmp_assist_levels;
 
@@ -638,8 +613,7 @@ void do_resize_assist_levels(const struct configtree_t *ign)
 	sstack_pop(); // assist level spinner
 }
 
-void do_interpolate_assist_levels(const struct configtree_t *ign)
-{
+void do_interpolate_assist_levels(const struct configtree_t *ign){
 	int oldv = ui_vars.ui8_number_of_assist_levels;
 	int newv = tmp_assist_levels;
 	uint16_t tmp[ASSIST_LEVEL_NUMBER];
@@ -814,8 +788,7 @@ bool enumerate_calibration(const struct scroller_config *cfg, int index, const s
 
 }
 
-void cfg_push_calibration_screen(const struct configtree_t *it)
-{
+void cfg_push_calibration_screen(const struct configtree_t *it){
 	if(it->scrollitem.text[0] == 'L') {
 		current_cdata = ui_vars.ui16_torque_sensor_calibration_table_left;
 		cfg_list_push_class(&cfg_calibration, &cfg_calib_class);
