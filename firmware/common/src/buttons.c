@@ -36,28 +36,24 @@ buttons_events_t buttons_events = 0;
 #include "pins.h"
 
 uint32_t buttons_get_up_state(void) {
-	if (ui_vars.ui8_buttons_up_down_invert) {
-		return GPIO_ReadInputDataBit(BUTTON_DOWN__PORT, BUTTON_DOWN__PIN) != 0 ?
-				0 : 1;
-	} else {
-		return GPIO_ReadInputDataBit(BUTTON_UP__PORT, BUTTON_UP__PIN) != 0 ?
-				0 : 1;
-	}
+	if (ui_vars.ui8_buttons_up_down_invert) 
+		return GPIO_ReadInputDataBit(BUTTON_DOWN__PORT, BUTTON_DOWN__PIN) != 0 ? 0 : 1;
+	else
+		return GPIO_ReadInputDataBit(BUTTON_UP__PORT, BUTTON_UP__PIN) != 0 ? 0 : 1;	
+	
 }
 
 uint32_t buttons_get_down_state(void) {
-	if (ui_vars.ui8_buttons_up_down_invert) {
-		return GPIO_ReadInputDataBit(BUTTON_UP__PORT, BUTTON_UP__PIN) != 0 ?
-				0 : 1;
-	} else {
-		return GPIO_ReadInputDataBit(BUTTON_DOWN__PORT, BUTTON_DOWN__PIN) != 0 ?
-				0 : 1;
-	}
+	if (ui_vars.ui8_buttons_up_down_invert)
+		return GPIO_ReadInputDataBit(BUTTON_UP__PORT, BUTTON_UP__PIN) != 0 ? 0 : 1;
+	else
+		return GPIO_ReadInputDataBit(BUTTON_DOWN__PORT, BUTTON_DOWN__PIN) != 0 ? 0 : 1;
+	
 }
 
 uint32_t buttons_get_onoff_state(void) {
-	return GPIO_ReadInputDataBit(BUTTON_ONOFF__PORT, BUTTON_ONOFF__PIN) != 0 ?
-			0 : 1;
+	return GPIO_ReadInputDataBit(BUTTON_ONOFF__PORT, BUTTON_ONOFF__PIN) != 0 ? 0 : 1;
+	
 }
 
 uint32_t buttons_get_m_state(void) {
@@ -71,43 +67,32 @@ uint32_t buttons_get_m_state(void) {
 #else
 #include "main.h"
 
-uint32_t buttons_get_up_state (void)
-{
+uint32_t buttons_get_up_state (void){
   if(!ui_vars.ui8_buttons_up_down_invert)
-  {
     return PollButton(&buttonUP);
-  }
   else
-  {
     return PollButton(&buttonDWN);
-  }
 }
 
-uint32_t buttons_get_down_state (void)
-{
+uint32_t buttons_get_down_state (void){
   if(ui_vars.ui8_buttons_up_down_invert)
-  {
     return PollButton(&buttonUP);
-  }
   else
-  {
     return PollButton(&buttonDWN);
-  }
 }
 
-uint32_t buttons_get_onoff_state (void)
-{
+uint32_t buttons_get_onoff_state (void){
   return PollButton(&buttonPWR);
+  
 }
 
-uint32_t buttons_get_m_state (void)
-{
+uint32_t buttons_get_m_state (void){
   return PollButton(&buttonM);
 }
 #endif
 
 uint32_t buttons_get_m_click_event(void) {
-	return (buttons_events & M_CLICK) ? 1 : 0;
+	return (buttons_events & M_CLICK) ? 1 : 0;	
 }
 
 uint32_t buttons_get_m_long_click_event(void) {
@@ -207,98 +192,97 @@ void buttons_clock(void) {
 	// exit if any button is pressed after clear event
 	if ((ui32_m_clear_event)
 			&& (buttons_get_up_state() || buttons_get_down_state() || buttons_get_m_state()
-					|| buttons_get_onoff_state())) {
+					|| buttons_get_onoff_state()))
 		return;
-	} else {
+	else
 		ui32_m_clear_event = 0;
-	}
 
 	switch (ui32_onoff_button_state) {
-	case 0:
-		if (buttons_get_onoff_state()) {
-			ui32_onoff_button_state_counter = 0;
-			ui32_onoff_button_state = 1;
-		}
-		break;
-
-	case 1:
-		ui32_onoff_button_state_counter++;
-
-		// event long click
-		if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_1)) {
-			buttons_set_events(ONOFF_LONG_CLICK);
-			ui32_onoff_button_state = 2;
-			break;
-		}
-
-		// if button release
-		if (!buttons_get_onoff_state()) {
-#ifndef DISABLE_ONOFF_CLICK_LONGCLICK
-			// let's validade if will be a quick click + long click
-			if (ui32_onoff_button_state_counter <= MS_TO_TICKS(TIME_2)) {
+		case 0:
+			if (buttons_get_onoff_state()) {
 				ui32_onoff_button_state_counter = 0;
-				ui32_onoff_button_state = 3;
+				ui32_onoff_button_state = 1;
+			}
+			break;
+
+		case 1:
+			ui32_onoff_button_state_counter++;
+
+			// event long click
+			if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_1)) {
+				buttons_set_events(ONOFF_LONG_CLICK);
+				ui32_onoff_button_state = 2;
 				break;
 			}
+
+			// if button release
+			if (!buttons_get_onoff_state()) {
+	#ifndef DISABLE_ONOFF_CLICK_LONGCLICK
+				// let's validade if will be a quick click + long click
+				if (ui32_onoff_button_state_counter <= MS_TO_TICKS(TIME_2)) {
+					ui32_onoff_button_state_counter = 0;
+					ui32_onoff_button_state = 3;
+					break;
+				}
+				// event click
+				else 
+	#endif
+				{
+					buttons_set_events(ONOFF_CLICK);
+					ui32_onoff_button_state = 0;
+					break;
+				}
+			}
+			break;
+
+		case 2:
+			// wait for button release
+			if (!buttons_get_onoff_state()) {
+				ui32_onoff_button_state = 0;
+				break;
+			}
+			break;
+
+		case 3:
+			ui32_onoff_button_state_counter++;
+
+			// on next step, start counting for long click
+			if (buttons_get_onoff_state()) {
+				ui32_onoff_button_state_counter = 0;
+				ui32_onoff_button_state = 4;
+				break;
+			}
+
 			// event click
-			else 
-#endif
-			{
+			if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_3)) {
 				buttons_set_events(ONOFF_CLICK);
 				ui32_onoff_button_state = 0;
 				break;
 			}
-		}
-		break;
+			break;
 
-	case 2:
-		// wait for button release
-		if (!buttons_get_onoff_state()) {
+		case 4:
+			ui32_onoff_button_state_counter++;
+
+			// event click, but this time it is: click + long click
+			if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_4)) {
+				buttons_set_events(ONOFF_CLICK_LONG_CLICK);
+				ui32_onoff_button_state = 2;
+				break;
+			}
+
+			// button release
+			if (!buttons_get_onoff_state()) {
+				buttons_set_events(ONOFF_CLICK);
+				ui32_onoff_button_state = 0;
+				break;
+			}
+			break;
+
+		default:
 			ui32_onoff_button_state = 0;
 			break;
 		}
-		break;
-
-	case 3:
-		ui32_onoff_button_state_counter++;
-
-		// on next step, start counting for long click
-		if (buttons_get_onoff_state()) {
-			ui32_onoff_button_state_counter = 0;
-			ui32_onoff_button_state = 4;
-			break;
-		}
-
-		// event click
-		if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_3)) {
-			buttons_set_events(ONOFF_CLICK);
-			ui32_onoff_button_state = 0;
-			break;
-		}
-		break;
-
-	case 4:
-		ui32_onoff_button_state_counter++;
-
-		// event click, but this time it is: click + long click
-		if (ui32_onoff_button_state_counter > MS_TO_TICKS(TIME_4)) {
-			buttons_set_events(ONOFF_CLICK_LONG_CLICK);
-			ui32_onoff_button_state = 2;
-			break;
-		}
-
-		// button release
-		if (!buttons_get_onoff_state()) {
-			buttons_set_events(ONOFF_CLICK);
-			ui32_onoff_button_state = 0;
-			break;
-		}
-		break;
-
-	default:
-		ui32_onoff_button_state = 0;
-		break;
-	}
 
 
 
@@ -395,58 +379,54 @@ void buttons_clock(void) {
       break;
 	}
 
+	switch (ui32_down_button_state) {
+		case 0:
+			if (buttons_get_down_state()) {
+			ui32_down_button_state_counter = 0;
+			ui32_down_button_state = 1;
+			}
+			break;
 
+		case 1:
+			// event long click
+			if (ui32_down_button_state_counter++ > MS_TO_TICKS(TIME_1)) {
+				if (buttons_get_onoff_state() && buttons_get_up_state()) {
+					// reset all events and machine state of others
+					buttons_clear_all_events();
+					ui32_up_button_state = 0;
+					ui32_onoff_button_state = 0;
+					ui32_m_button_state = 0;
+					buttons_set_events(ONOFFUPDOWN_LONG_CLICK);
+				} else if (buttons_get_onoff_state())
+					buttons_set_events(ONOFFDOWN_LONG_CLICK);
+				else if (buttons_get_up_state())
+					buttons_set_events(UPDOWN_LONG_CLICK);
+				else
+					buttons_set_events(DOWN_LONG_CLICK);
 
+				ui32_down_button_state = 2;
+				ui32_down_button_state_counter = 0;
+				break;
+			}
 
-  switch (ui32_down_button_state) {
-    case 0:
-      if (buttons_get_down_state()) {
-        ui32_down_button_state_counter = 0;
-        ui32_down_button_state = 1;
-      }
-      break;
+			// if button release
+			if (!buttons_get_down_state()) {
+				buttons_set_events(DOWN_CLICK);
+				ui32_down_button_state = 0;
+				break;
+			}
+			
+			break;
 
-    case 1:
-      // event long click
-      if (ui32_down_button_state_counter++ > MS_TO_TICKS(TIME_1)) {
-        if (buttons_get_onoff_state() &&
-            buttons_get_up_state()) {
-          // reset all events and machine state of others
-          buttons_clear_all_events();
-          ui32_up_button_state = 0;
-          ui32_onoff_button_state = 0;
-          ui32_m_button_state = 0;
-          buttons_set_events(ONOFFUPDOWN_LONG_CLICK);
-        } else if (buttons_get_onoff_state()) {
-          buttons_set_events(ONOFFDOWN_LONG_CLICK);
-        } else if (buttons_get_up_state()) {
-          buttons_set_events(UPDOWN_LONG_CLICK);
-        } else {
-          buttons_set_events(DOWN_LONG_CLICK);
-        }
+		case 2:
+			// wait for button release
+			if (!buttons_get_down_state())
+				ui32_down_button_state = 0;
 
-        ui32_down_button_state = 2;
-        ui32_down_button_state_counter = 0;
-        break;
-      }
+		break;
 
-      // if button release
-      if (!buttons_get_down_state()) {
-        buttons_set_events(DOWN_CLICK);
-        ui32_down_button_state = 0;
-        break;
-      }
-      break;
-
-    case 2:
-      // wait for button release
-      if (!buttons_get_down_state()) {
-        ui32_down_button_state = 0;
-      }
-      break;
-
-    default:
-      ui32_down_button_state = 0;
-      break;
-  }
+		default:
+			ui32_down_button_state = 0;
+			break;
+	}
 }
